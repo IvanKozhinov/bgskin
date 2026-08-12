@@ -172,17 +172,35 @@ export default function Home() {
       {/* Bottom CTA band */}
       <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-6 lg:pb-28">
         <Reveal>
-          <div className="relative overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-r from-accent/10 to-accent-hot/10 px-6 py-14 text-center sm:px-12 sm:py-16">
-            <div className="blob -left-20 -top-20 h-64 w-64 bg-accent/30" />
-            <div className="blob -bottom-24 -right-16 h-64 w-64 bg-accent-hot/25" />
-            {/* Decorative generated knife, right-anchored, behind the copy */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/art/hero-knife.webp"
-              alt=""
+          <div className="relative overflow-hidden rounded-3xl border border-accent/20 px-6 py-16 text-center sm:px-12 sm:py-20">
+            {/* Layered warm panel wash */}
+            <div className="pointer-events-none absolute inset-0 bg-panel" />
+            <div
+              className="pointer-events-none absolute inset-0"
+              style={{
+                backgroundImage:
+                  "radial-gradient(130% 150% at 100% 0%, rgba(255,106,0,0.16), transparent 55%), radial-gradient(120% 140% at 0% 100%, rgba(255,177,41,0.10), transparent 50%)",
+              }}
+            />
+            {/* Top hairline highlight */}
+            <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-accent/50 to-transparent" />
+            <div className="blob -left-24 -top-24 h-64 w-64 bg-accent/20" />
+            {/* Decorative knife — feathered into the panel so no image edges show.
+                Screen blend drops the near-black backdrop; the radial mask fades
+                every edge of the bitmap to transparent. */}
+            <div
               aria-hidden
-              loading="lazy"
-              className="pointer-events-none absolute -right-10 top-1/2 hidden w-80 -translate-y-1/2 rotate-12 opacity-30 mix-blend-screen lg:block"
+              className="pointer-events-none absolute inset-y-0 right-0 hidden w-2/3 lg:block"
+              style={{
+                backgroundImage: "url(/art/hero-knife.webp)",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "right 58%",
+                backgroundSize: "auto 168%",
+                mixBlendMode: "screen",
+                opacity: 0.6,
+                maskImage: "radial-gradient(62% 82% at 78% 54%, #000 28%, transparent 70%)",
+                WebkitMaskImage: "radial-gradient(62% 82% at 78% 54%, #000 28%, transparent 70%)",
+              }}
             />
             <div className="relative">
               <h2 className="font-display text-3xl font-bold sm:text-4xl">
