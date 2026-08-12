@@ -142,6 +142,18 @@ export default function Hero() {
       <div className="blob -top-24 left-[8%] h-80 w-80 bg-accent/35" />
       <div className="blob right-[4%] top-24 h-96 w-96 bg-violet/35" />
 
+      {/* Generated ambient art — right-anchored, fades to the left so the
+          headline stays on clean dark space. */}
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] bg-cover bg-right bg-no-repeat opacity-35 lg:block"
+        style={{
+          backgroundImage: "url(/art/hero-bg.webp)",
+          maskImage: "linear-gradient(to right, transparent, black 60%)",
+          WebkitMaskImage: "linear-gradient(to right, transparent, black 60%)",
+        }}
+        aria-hidden
+      />
+
       <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pb-24 pt-16 sm:px-6 lg:grid-cols-2 lg:pb-28 lg:pt-24">
         {/* Left: copy + CTAs */}
         <motion.div

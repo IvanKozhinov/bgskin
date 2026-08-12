@@ -8,9 +8,10 @@
  */
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 
 const KEY = process.env.OPENROUTER_API_KEY;
-const MODEL = process.env.ART_MODEL || "openai/gpt-image-2";
+const MODEL = process.env.ART_MODEL || "openai/gpt-5.4-image-2"; // GPT Image 2 на OpenRouter
 const OUT_DIR = path.join(process.cwd(), "public", "art");
 
 const STYLE =
@@ -59,26 +60,45 @@ const JOBS: { slug: string; size: string; prompt: string }[] = [
   },
 ];
 
-async function generate(job: (typeof JOBS)[number]): Promise<void> {
-  console.log(`→ ${job.slug} (${MODEL}, ${job.size})...`);
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${KEY}`,
-      "Content-Type": "application/json",
-      "HTTP-Referer": "https://bgaskins.cc",
-      "X-Title": "BGASkins Art Pipeline",
-    },
-    body: JSON.stringify({
+// Запросы идут через системный curl: WAF OpenRouter на image-моделях
+// отклоняет TLS-отпечаток Node/undici (403 access denied), а curl проходит.
+function curlJson(payload: unknown): string {
+  return execFileSync(
+    "curl",
+    [
+      "-s",
+      "--max-time",
+      "240",
+      "https://openrouter.ai/api/v1/chat/completions",
+      "-H",
+      `Authorization: Bearer ${KEY}`,
+      "-H",
+      "Content-Type: application/json",
+      "-d",
+      "@-",
+    ],
+    { input: JSON.stringify(payload), maxBuffer: 128 * 1024 * 1024, encoding: "utf8" },
+  );
+}
+
+async function generate(job: (typeof JOBS)[number], attempt = 1): Promise<void> {
+  console.log(`→ ${job.slug} (${MODEL}, ${job.size}, попытка ${attempt})...`);
+  let raw: string;
+  try {
+    raw = curlJson({
       model: MODEL,
       modalities: ["image", "text"],
       messages: [{ role: "user", content: `${job.prompt}\n\nImage size: ${job.size}.` }],
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`OpenRouter HTTP ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    });
+  } catch (e) {
+    if (attempt < 3) {
+      console.log(`  … сетевая ошибка, ретрай через 5с`);
+      await new Promise((r) => setTimeout(r, 5000));
+      return generate(job, attempt + 1);
+    }
+    throw e;
   }
-  const data = (await res.json()) as {
+  let data: {
     choices?: {
       message?: {
         images?: { image_url?: { url?: string } }[];
@@ -87,6 +107,11 @@ async function generate(job: (typeof JOBS)[number]): Promise<void> {
     }[];
     error?: { message?: string };
   };
+  try {
+    data = JSON.parse(raw.trim());
+  } catch {
+    throw new Error(`Невалидный JSON от OpenRouter: ${raw.trim().slice(0, 200)}`);
+  }
   if (data.error) throw new Error(`OpenRouter: ${data.error.message}`);
   const url = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
   if (!url) throw new Error(`Нет изображения в ответе: ${JSON.stringify(data).slice(0, 300)}`);

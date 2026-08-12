@@ -2,11 +2,26 @@
 // Every method is a POST to a single endpoint with `method` in the body,
 // signed with the legacy shopid/sign scheme (HMAC-SHA1 over sorted params).
 
-import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { skinsbackSecret, skinsbackShopId } from "./config";
 
 const API_URL = "https://skinsback.com/api.php";
 const REQUEST_TIMEOUT_MS = 15_000;
+
+/**
+ * A definitive API-level rejection (Skinsback replied `status:"error"`), as
+ * opposed to a network/timeout/parse failure. The distinction matters for
+ * market_buy: an API error means no purchase was made (safe to refund), while
+ * a timeout means the purchase may have gone through (must NOT blind-refund).
+ */
+export class SkinsbackApiError extends Error {
+  readonly code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.name = "SkinsbackApiError";
+    this.code = code;
+  }
+}
 
 type SbScalar = string | number;
 type SbParamValue = SbScalar | SbScalar[];
@@ -91,11 +106,12 @@ async function sbCall(method: string, params: SbParams = {}): Promise<Record<str
     throw new Error(`Skinsback returned unexpected payload for method ${method}`);
   }
   if (json.status !== "success") {
+    const code = toStr(json.error_code) || "unknown";
     const message =
       typeof json.error_message === "string" && json.error_message
         ? json.error_message
-        : `Skinsback error ${toStr(json.error_code) || "unknown"} (method ${method})`;
-    throw new Error(message);
+        : `Skinsback error ${code} (method ${method})`;
+    throw new SkinsbackApiError(message, code);
   }
   return json;
 }
@@ -186,30 +202,22 @@ function safeEqualHex(a: string, b: string): boolean {
 }
 
 /**
- * Verify a Skinsback webhook.
- * Accepts either:
- *  - header "Signature" = hex HMAC-SHA256(rawBody, secret), or
- *  - header "X-SIGN" = md5(shopId + secret).
- * Returns false when no secret is configured.
+ * Verify a Skinsback webhook by the "Signature" header = hex HMAC-SHA256 of the
+ * RAW request body keyed with the shop secret. Returns false when no secret is
+ * configured. The legacy X-SIGN = md5(shopId+secret) scheme is intentionally
+ * NOT accepted: it is a static, body-independent token, so a single leaked
+ * header (proxy/APM logs) would let an attacker forge any money-mutating
+ * callback. Body-bound HMAC is the only path.
  */
 export function verifyWebhookSignature(rawBody: string, headers: Headers): boolean {
   const secret = skinsbackSecret();
   if (!secret) return false;
 
-  const signature = headers.get("Signature") ?? headers.get("signature");
-  if (signature) {
-    const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-    if (safeEqualHex(signature.trim().toLowerCase(), expected)) return true;
-  }
-
-  const xSign = headers.get("X-SIGN") ?? headers.get("x-sign");
-  const shopId = skinsbackShopId();
-  if (xSign && shopId) {
-    const expected = createHash("md5").update(shopId + secret).digest("hex");
-    if (safeEqualHex(xSign.trim().toLowerCase(), expected)) return true;
-  }
-
-  return false;
+  const signature =
+    headers.get("Signature") ?? headers.get("signature") ?? headers.get("x-signature");
+  if (!signature) return false;
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  return safeEqualHex(signature.trim().toLowerCase(), expected);
 }
 
 /** Parse a Steam trade offer URL into its partner/token parts. */

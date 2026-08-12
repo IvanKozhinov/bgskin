@@ -6,6 +6,7 @@ import type { CSSProperties } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { CatalogItem, RarityId } from "@/lib/types";
 import { formatPrice, rarityColor } from "@/lib/types";
+import { onImgError } from "@/lib/img";
 import BuyModal from "./BuyModal";
 
 /** Russian labels for CS2 rarity tiers (UI copy, colors come from RARITY_META). */
@@ -56,6 +57,7 @@ export default function ItemCard({ item }: { item: CatalogItem }) {
               src={item.image}
               alt={item.name}
               loading="lazy"
+              onError={onImgError}
               className="h-full w-full object-contain transition-transform duration-300 ease-out group-hover:scale-[1.06]"
               style={{ filter: `drop-shadow(0 12px 22px ${color}55)` }}
             />

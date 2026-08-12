@@ -5,7 +5,17 @@ export function siteUrl(): string {
 }
 
 export function sessionSecret(): string {
-  return process.env.SESSION_SECRET || "bgaskins-dev-secret-do-not-use-in-prod";
+  const s = process.env.SESSION_SECRET;
+  if (s && s.length > 0) return s;
+  // Fail closed in production: never sign/verify sessions with the public,
+  // repo-committed dev key — a forgotten env var would otherwise be a full
+  // account-takeover hole (anyone could mint a session for any SteamID).
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "SESSION_SECRET is required in production. Set it to a long random string in the environment.",
+    );
+  }
+  return "bgaskins-dev-secret-do-not-use-in-prod";
 }
 
 export function steamApiKey(): string | null {

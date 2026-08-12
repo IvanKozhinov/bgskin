@@ -38,7 +38,26 @@ function open(): Database.Database {
       nonce TEXT PRIMARY KEY,
       seen_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS meta (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
+
+  // Demo balances are play money; they must not be spendable once the site
+  // switches to live Skinsback mode. When the stored mode flips demo -> live,
+  // zero every balance so users start from a real (funded) balance instead.
+  const mode = isSkinsbackLive() ? "live" : "demo";
+  const prev = db.prepare("SELECT value FROM meta WHERE key = 'mode'").get() as
+    | { value: string }
+    | undefined;
+  if (prev?.value === "demo" && mode === "live") {
+    db.prepare("UPDATE users SET balance_cents = 0").run();
+  }
+  db.prepare(
+    "INSERT INTO meta (key, value) VALUES ('mode', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+  ).run(mode);
+
   return db;
 }
 
@@ -192,6 +211,61 @@ export function updateOrderStatus(opts: {
       "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE skinsback_order_id = ?",
     ).run(opts.status, opts.skinsbackOrderId);
   }
+}
+
+// Order lifecycle ordering for the monotonic (forward-only) status ladder.
+const STATUS_RANK: Record<OrderStatus, number> = {
+  pending: 0,
+  processing: 1,
+  sent: 2,
+  delivered: 3,
+  failed: 3,
+  demo_delivered: 3,
+};
+
+/**
+ * Advance an order's status only forward along the ladder (a late "processing"
+ * webhook can never clobber a "sent"/"delivered"/"failed" that already landed).
+ */
+export function advanceOrderStatus(customId: string, status: OrderStatus): void {
+  const db = getDb();
+  const row = db.prepare("SELECT status FROM orders WHERE custom_id = ?").get(customId) as
+    | { status: OrderStatus }
+    | undefined;
+  if (!row) return;
+  if (STATUS_RANK[status] < STATUS_RANK[row.status]) return;
+  db.prepare(
+    "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE custom_id = ?",
+  ).run(status, customId);
+}
+
+/**
+ * Atomically fail an order and refund its price to the buyer — exactly once.
+ * Both the buy-route error path and the Skinsback webhook can call this; the
+ * status guard inside a single synchronous transaction guarantees only the
+ * first caller credits the balance. Returns true if this call performed the
+ * refund. Only orders still in pending/processing are refundable.
+ */
+export function failAndRefundOnce(customId: string): boolean {
+  const db = getDb();
+  const tx = db.transaction((cid: string): boolean => {
+    const row = db
+      .prepare(
+        "SELECT user_steam_id AS u, price_cents AS p, status AS s FROM orders WHERE custom_id = ?",
+      )
+      .get(cid) as { u: string; p: number; s: OrderStatus } | undefined;
+    if (!row) return false;
+    if (row.s !== "pending" && row.s !== "processing") return false;
+    db.prepare(
+      "UPDATE orders SET status = 'failed', updated_at = datetime('now') WHERE custom_id = ?",
+    ).run(cid);
+    db.prepare("UPDATE users SET balance_cents = balance_cents + ? WHERE steam_id = ?").run(
+      row.p,
+      row.u,
+    );
+    return true;
+  });
+  return tx(customId);
 }
 
 export function setOrderSkinsbackId(orderId: number, skinsbackOrderId: string): void {

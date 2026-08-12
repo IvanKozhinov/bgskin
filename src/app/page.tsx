@@ -103,11 +103,20 @@ export default function Home() {
       {/* How it works */}
       <section className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:py-8">
         <Reveal>
-          <div className="text-center">
-            <p className="font-display text-sm font-semibold tracking-widest text-accent">
-              ТРИ ПРОСТЫХ ШАГА
-            </p>
-            <h2 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Как это работает</h2>
+          <div className="flex flex-col items-center gap-6 text-center lg:flex-row lg:justify-center lg:gap-5 lg:text-left">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/steps-trade.webp"
+              alt="Обмен предметом между игроком и площадкой"
+              loading="lazy"
+              className="h-24 w-24 shrink-0 object-contain drop-shadow-[0_8px_24px_rgba(255,140,0,0.35)] sm:h-28 sm:w-28"
+            />
+            <div>
+              <p className="font-display text-sm font-semibold tracking-widest text-accent">
+                ТРИ ПРОСТЫХ ШАГА
+              </p>
+              <h2 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Как это работает</h2>
+            </div>
           </div>
         </Reveal>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
@@ -166,6 +175,15 @@ export default function Home() {
           <div className="relative overflow-hidden rounded-2xl border border-accent/25 bg-gradient-to-r from-accent/10 to-accent-hot/10 px-6 py-14 text-center sm:px-12 sm:py-16">
             <div className="blob -left-20 -top-20 h-64 w-64 bg-accent/30" />
             <div className="blob -bottom-24 -right-16 h-64 w-64 bg-accent-hot/25" />
+            {/* Decorative generated knife, right-anchored, behind the copy */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/art/hero-knife.webp"
+              alt=""
+              aria-hidden
+              loading="lazy"
+              className="pointer-events-none absolute -right-10 top-1/2 hidden w-80 -translate-y-1/2 rotate-12 opacity-30 mix-blend-screen lg:block"
+            />
             <div className="relative">
               <h2 className="font-display text-3xl font-bold sm:text-4xl">
                 Готов обновить <span className="text-glow text-accent">инвентарь</span>?

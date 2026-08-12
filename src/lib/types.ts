@@ -44,6 +44,7 @@ export interface CatalogItem {
   collection?: string;
   priceCents: number; // current price, integer cents USD
   popularity: number; // 0..100 synthetic, for "hot" sorting
+  available?: boolean; // false in live mode when no Skinsback price exists (not buyable). undefined == true.
 }
 
 export interface CatalogFilters {
@@ -121,6 +122,11 @@ export interface BuyResponse {
   error?: string;
   order?: Order;
   newBalanceCents?: number;
+  /** Set when the store price moved since the item was shown; client re-confirms. */
+  priceChanged?: boolean;
+  currentPriceCents?: number;
+  /** Live mode: purchase is in flight and not yet confirmed; balance NOT refunded. */
+  pending?: boolean;
 }
 
 export function formatPrice(cents: number): string {

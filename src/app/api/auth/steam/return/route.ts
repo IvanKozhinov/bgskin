@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { siteUrl } from "@/lib/config";
-import { upsertUser } from "@/lib/db";
+import { getUser, upsertUser } from "@/lib/db";
 import { createSession } from "@/lib/session";
 import { fetchSteamProfile, verifySteamCallback } from "@/lib/steam";
 
@@ -15,7 +15,12 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const profile = await fetchSteamProfile(steamId);
-  upsertUser(steamId, profile.name, profile.avatar);
+  // A failed profile fetch returns a placeholder (empty avatar). On re-login,
+  // don't overwrite an already-good stored name/avatar with that placeholder.
+  const existing = getUser(steamId);
+  const name = profile.avatar ? profile.name : existing?.name || profile.name;
+  const avatar = profile.avatar || existing?.avatar || "";
+  upsertUser(steamId, name, avatar);
   // createSession sets the httpOnly cookie via cookies(), which is writable
   // inside route handlers; the cookie rides along with the redirect response.
   await createSession(steamId);

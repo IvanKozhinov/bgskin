@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
 import type { CatalogItem, MeResponse, BuyResponse, Order } from "@/lib/types";
 import { formatPrice, rarityColor } from "@/lib/types";
+import { onImgError } from "@/lib/img";
 
 type View = "loading" | "login" | "tradeurl" | "confirm" | "buying" | "success" | "error";
 
@@ -35,10 +36,15 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
   const [tradeUrl, setTradeUrl] = useState("");
   const [tuError, setTuError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [priceOverride, setPriceOverride] = useState<number | null>(null);
+  const [pending, setPending] = useState(false);
 
   const color = rarityColor(item.rarity);
   const user = me?.user ?? null;
-  const insufficient = user !== null && user.balanceCents < item.priceCents;
+  // The price actually charged tracks any server-side re-quote (priceChanged).
+  const price = priceOverride ?? item.priceCents;
+  const insufficient = user !== null && user.balanceCents < price;
 
   // Bumped by retry() to re-run the profile fetch; callers put the modal into
   // the "loading" view first (the initial state already is).
@@ -65,14 +71,15 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
     };
   }, [loadNonce]);
 
-  // Escape closes
+  // Escape closes — but never while a purchase is in flight.
+  const busy = view === "buying";
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !busy) onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, busy]);
 
   // Lock body scroll while open
   useEffect(() => {
@@ -114,15 +121,27 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
   async function buy() {
     setView("buying");
     setError(null);
+    setNotice(null);
     try {
       const r = await fetch("/api/buy", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itemId: item.id }),
+        body: JSON.stringify({ itemId: item.id, expectedPriceCents: price }),
       });
       const d = (await r.json()) as BuyResponse;
-      if (d.ok) {
+
+      // Price moved server-side: re-quote and ask the user to confirm again.
+      if (d.priceChanged && typeof d.currentPriceCents === "number") {
+        setPriceOverride(d.currentPriceCents);
+        setNotice(`Цена обновилась до ${formatPrice(d.currentPriceCents)}. Подтвердите покупку заново.`);
+        setView("confirm");
+        return;
+      }
+
+      // ok = delivered/created; pending = purchase in flight (balance debited).
+      if (d.ok || d.pending) {
         setOrder(d.order ?? null);
+        setPending(Boolean(d.pending));
         if (typeof d.newBalanceCents === "number") {
           setMe((m) =>
             m && m.user ? { ...m, user: { ...m.user, balanceCents: d.newBalanceCents as number } } : m,
@@ -130,12 +149,13 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
         }
         setView("success");
         window.dispatchEvent(new Event("bga:balance-changed"));
-      } else {
-        setError(d.error ?? "Не удалось совершить покупку");
-        setView("error");
+        return;
       }
+
+      setError(d.error ?? "Не удалось совершить покупку");
+      setView("error");
     } catch {
-      setError("Ошибка сети. Попробуйте ещё раз.");
+      setError("Ошибка сети. Покупка могла не пройти — проверьте историю заказов в профиле.");
       setView("error");
     }
   }
@@ -152,7 +172,9 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
 
   if (typeof document === "undefined") return null;
 
-  const busy = view === "buying";
+  const dismiss = () => {
+    if (!busy) onClose();
+  };
 
   return createPortal(
     <motion.div
@@ -165,7 +187,7 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
       aria-modal="true"
       aria-label={`Покупка: ${item.name}`}
     >
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={dismiss} />
 
       <motion.div
         className="panel relative w-full max-w-md p-6 shadow-[0_24px_90px_-20px_rgba(0,0,0,0.85)]"
@@ -178,8 +200,9 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
         <button
           type="button"
           aria-label="Закрыть"
-          onClick={onClose}
-          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-panel-2 hover:text-ink"
+          onClick={dismiss}
+          disabled={busy}
+          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-lg text-ink-faint transition-colors hover:bg-panel-2 hover:text-ink disabled:opacity-40"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden>
             <path d="M2 2l10 10M12 2L2 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
@@ -267,6 +290,7 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
                 src={item.image}
                 alt={item.name}
                 loading="lazy"
+                onError={onImgError}
                 className="h-14 w-20 shrink-0 object-contain"
                 style={{ filter: `drop-shadow(0 6px 14px ${color}55)` }}
               />
@@ -277,9 +301,15 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
                 </div>
               </div>
               <div className="ml-auto shrink-0 font-display text-lg font-bold text-accent">
-                {formatPrice(item.priceCents)}
+                {formatPrice(price)}
               </div>
             </div>
+
+            {notice && (
+              <p className="mt-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+                {notice}
+              </p>
+            )}
 
             <div className="mt-4 space-y-2 text-sm">
               <div className="flex items-center justify-between">
@@ -290,13 +320,13 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-ink-dim">К оплате</span>
-                <span className="font-display font-bold">{formatPrice(item.priceCents)}</span>
+                <span className="font-display font-bold">{formatPrice(price)}</span>
               </div>
               {!insufficient && (
                 <div className="flex items-center justify-between">
                   <span className="text-ink-dim">Останется</span>
                   <span className="font-display font-semibold text-ink-dim">
-                    {formatPrice(user.balanceCents - item.priceCents)}
+                    {formatPrice(user.balanceCents - price)}
                   </span>
                 </div>
               )}
@@ -343,11 +373,22 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
               </svg>
             </motion.div>
             <h3 className="mt-4 font-display text-xl font-bold">
-              {me?.demo ? "Куплено (демо-режим)!" : "Предмет отправлен!"}
+              {me?.demo
+                ? "Куплено (демо-режим)!"
+                : pending
+                  ? "Покупка обрабатывается"
+                  : "Покупка оформлена!"}
             </h3>
             <p className="mt-1 text-sm text-ink-dim">
-              {item.name} — {formatPrice(item.priceCents)}
+              {item.name} — {formatPrice(price)}
             </p>
+            {!me?.demo && (
+              <p className="mt-2 text-xs text-ink-faint">
+                {pending
+                  ? "Мы создаём трейд-оффер. Он придёт в Steam в течение нескольких минут — статус можно отслеживать в профиле."
+                  : "Создаём трейд-оффер — примите его в Steam, чтобы забрать предмет."}
+              </p>
+            )}
             {order && <p className="mt-1 text-xs text-ink-faint">Заказ #{order.id}</p>}
             <button type="button" className="btn-primary mt-5 w-full" onClick={onClose}>
               Отлично

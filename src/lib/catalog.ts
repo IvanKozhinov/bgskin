@@ -12,6 +12,7 @@ import type {
 } from "@/lib/types";
 import { RARITY_META } from "@/lib/types";
 import { getLivePriceMapCents } from "@/lib/prices";
+import { isSkinsbackLive } from "@/lib/config";
 
 const MERGE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_PER_PAGE = 24;
@@ -104,8 +105,16 @@ function buildStore(): CatalogStore {
     .filter((r) => rarityCounts.has(r))
     .map((rarity) => ({ rarity, count: rarityCounts.get(rarity) ?? 0 }));
 
-  // Demo prices immediately so the store is usable before the first merge.
-  const priced = base.map((it) => ({ ...it, priceCents: demoPriceCents(it) }));
+  // Initial prices so the store is usable before the first merge. In demo mode
+  // that is the deterministic demo price (buyable). In live mode nothing is
+  // buyable until the real Skinsback price list has loaded, so mark items
+  // unavailable with a 0 price rather than charging a fabricated demo price.
+  const live = isSkinsbackLive();
+  const priced = base.map((it) => ({
+    ...it,
+    priceCents: live ? 0 : demoPriceCents(it),
+    available: !live,
+  }));
 
   return {
     base,
@@ -169,26 +178,44 @@ function buildBasePriceMap(live: Map<string, number>): Map<string, number> {
 function priceBounds(items: CatalogItem[]): { min: number; max: number } {
   let min = Number.POSITIVE_INFINITY;
   let max = 0;
+  let n = 0;
   for (const it of items) {
+    if (it.available === false) continue; // ignore unpriced/unavailable items
+    n++;
     if (it.priceCents < min) min = it.priceCents;
     if (it.priceCents > max) max = it.priceCents;
   }
-  return items.length > 0 ? { min, max } : { min: 0, max: 0 };
+  return n > 0 ? { min, max } : { min: 0, max: 0 };
 }
 
 async function recomputePrices(store: CatalogStore): Promise<void> {
-  let live: Map<string, number> | null = null;
+  const live = isSkinsbackLive();
+  let liveMap: Map<string, number> | null = null;
   try {
-    live = await getLivePriceMapCents();
+    liveMap = await getLivePriceMapCents();
   } catch {
-    live = null; // provider failure -> demo prices
+    liveMap = null;
   }
-  const baseMap = live ? buildBasePriceMap(live) : null;
 
-  const priced = store.base.map((it) => ({
-    ...it,
-    priceCents: baseMap?.get(it.name) ?? demoPriceCents(it),
-  }));
+  // Live mode with the provider unreachable: keep the last known prices instead
+  // of repricing the entire catalog with fabricated demo numbers. Bump the
+  // timestamp so the next request retries the refresh.
+  if (live && liveMap === null) {
+    store.mergedAt = Date.now();
+    return;
+  }
+
+  const baseMap = liveMap ? buildBasePriceMap(liveMap) : null;
+
+  const priced = store.base.map((it) => {
+    if (baseMap) {
+      // Live mode: only items present in the Skinsback price list are buyable.
+      const p = baseMap.get(it.name);
+      return { ...it, priceCents: p ?? 0, available: p !== undefined };
+    }
+    // Demo mode: deterministic demo price, everything buyable.
+    return { ...it, priceCents: demoPriceCents(it), available: true };
+  });
 
   store.priced = priced;
   store.pricedById = new Map(priced.map((it) => [it.id, it]));
@@ -215,7 +242,8 @@ async function ensureFresh(): Promise<CatalogStore> {
 
 export async function getAllItems(): Promise<CatalogItem[]> {
   const store = await ensureFresh();
-  return [...store.priced];
+  // Only buyable items — consumers are the fake feed and "hot items" showcase.
+  return store.priced.filter((it) => it.available !== false);
 }
 
 export async function getItemById(id: string): Promise<CatalogItem | null> {
@@ -235,6 +263,7 @@ export async function queryCatalog(f: CatalogFilters): Promise<CatalogResponse> 
   const matched: CatalogItem[] = [];
   for (let i = 0; i < store.priced.length; i++) {
     const it = store.priced[i];
+    if (it.available === false) continue; // hide items with no live price
     if (f.category && it.category !== f.category) continue;
     if (weapon && it.weapon.toLowerCase() !== weapon) continue;
     if (raritySet && !raritySet.has(it.rarity)) continue;

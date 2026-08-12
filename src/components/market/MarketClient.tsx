@@ -124,6 +124,8 @@ export default function MarketClient() {
   const [pageData, setPageData] = useState<PageData | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [fetchError, setFetchError] = useState(false);
+  const [reloadNonce, setReloadNonce] = useState(0);
   const reqIdRef = useRef(0);
 
   const updateParams = useCallback(
@@ -191,16 +193,22 @@ export default function MarketClient() {
   useEffect(() => {
     const id = ++reqIdRef.current;
     fetch(`/api/catalog?${filterKey ? `${filterKey}&` : ""}page=1&perPage=${PER_PAGE}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((d: CatalogResponse) => {
         if (reqIdRef.current !== id) return;
+        setFetchError(false);
         setPageData({ key: filterKey, items: d.items, total: d.total, facets: d.facets, page: 1 });
       })
       .catch(() => {
         if (reqIdRef.current !== id) return;
+        // Distinguish a failed request from a genuinely empty result set.
+        setFetchError(true);
         setPageData({ key: filterKey, items: [], total: 0, facets: null, page: 1 });
       });
-  }, [filterKey]);
+  }, [filterKey, reloadNonce]);
 
   // Stale data (from previous filters) stays on screen, dimmed, while the new page loads.
   const loading = pageData === null || pageData.key !== filterKey;
@@ -496,9 +504,42 @@ export default function MarketClient() {
                 <SkeletonCard key={i} />
               ))}
             </div>
+          ) : fetchError ? (
+            <div className="panel flex flex-col items-center px-6 py-16 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/art/empty-state.webp"
+                alt=""
+                aria-hidden
+                loading="lazy"
+                className="h-40 w-40 object-contain opacity-90"
+              />
+              <h2 className="mt-4 font-display text-xl font-bold">Не удалось загрузить каталог</h2>
+              <p className="mt-1 max-w-sm text-sm text-ink-dim">
+                Проблема с соединением. Проверьте интернет и попробуйте снова.
+              </p>
+              <button
+                type="button"
+                className="btn-primary mt-5 !py-2 text-sm"
+                onClick={() => {
+                  setPageData(null);
+                  setFetchError(false);
+                  setReloadNonce((n) => n + 1);
+                }}
+              >
+                Повторить
+              </button>
+            </div>
           ) : items.length === 0 ? (
             <div className="panel flex flex-col items-center px-6 py-16 text-center">
-              <div className="text-5xl">🔎</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/art/empty-state.webp"
+                alt=""
+                aria-hidden
+                loading="lazy"
+                className="h-40 w-40 object-contain opacity-90"
+              />
               <h2 className="mt-4 font-display text-xl font-bold">Ничего не найдено</h2>
               <p className="mt-1 max-w-sm text-sm text-ink-dim">
                 По вашему запросу нет предметов. Попробуйте изменить фильтры или сбросить их.

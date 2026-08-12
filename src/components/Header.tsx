@@ -21,15 +21,46 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    fetch("/api/me")
-      .then((r) => r.json())
-      .then((d: MeResponse) => {
-        setUser(d.user);
-        setDemo(d.demo);
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+    let cancelled = false;
+    const refresh = () =>
+      fetch("/api/me")
+        .then((r) => r.json())
+        .then((d: MeResponse) => {
+          if (cancelled) return;
+          setUser(d.user);
+          setDemo(d.demo);
+        })
+        .catch(() => {})
+        .finally(() => {
+          if (!cancelled) setLoaded(true);
+        });
+    refresh();
+    // Purchases (and other balance mutations) dispatch this so the pill updates
+    // without a navigation.
+    const onBalance = () => void refresh();
+    window.addEventListener("bga:balance-changed", onBalance);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("bga:balance-changed", onBalance);
+    };
   }, [pathname]);
+
+  // Close the account dropdown on outside click or Escape.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!(e.target as HTMLElement)?.closest?.("[data-account-menu]")) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
+    };
+    window.addEventListener("mousedown", onDown);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("mousedown", onDown);
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -82,7 +113,7 @@ export default function Header() {
           {!loaded ? (
             <div className="skeleton h-9 w-36" />
           ) : user ? (
-            <div className="relative flex items-center gap-3">
+            <div className="relative flex items-center gap-3" data-account-menu>
               <span className="rounded-lg border border-line bg-panel px-3 py-1.5 font-display text-sm font-bold text-pos">
                 {formatPrice(user.balanceCents)}
               </span>
