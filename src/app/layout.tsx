@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { Chakra_Petch, Inter } from "next/font/google";
 import "./globals.css";
-import Header from "@/components/Header";
-import Footer from "@/components/Footer";
-import FeedTicker from "@/components/FeedTicker";
 import Track from "@/components/Track";
-import AdminHidden from "@/components/AdminHidden";
 
 const chakra = Chakra_Petch({
   variable: "--font-chakra",
@@ -39,17 +35,14 @@ export const metadata: Metadata = {
   },
 };
 
+// Root layout is intentionally minimal: storefront chrome (header/feed/footer)
+// lives in the (site) route group so the /admin surface never renders it.
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ru" className={`${chakra.variable} ${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <Track />
-        <Header />
-        <FeedTicker />
-        <main className="flex-1">{children}</main>
-        <AdminHidden>
-          <Footer />
-        </AdminHidden>
+        {children}
       </body>
     </html>
   );
