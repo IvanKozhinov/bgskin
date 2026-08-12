@@ -1,9 +1,7 @@
-// POST /api/buy — purchase an item.
-// Demo mode: instant fake delivery from balance.
-// Live mode: debit → find cheapest matching Skinsback offer → market_buy.
-//   - definitive API rejection → atomic refund;
-//   - ambiguous failure (timeout/network) → order left pending, NO blind refund
-//     (the purchase may have succeeded); reconciled via sbOrderInfo / webhook.
+// POST /api/buy — purchase an item with the user's balance.
+// A trade link and sufficient balance are required. Delivery is via Skinsback;
+// definitive API rejections refund atomically, ambiguous failures leave the
+// order pending (no blind refund). No demo/instant path.
 
 import { randomUUID } from "node:crypto";
 import { isSkinsbackLive } from "@/lib/config";
@@ -18,6 +16,7 @@ import {
   tryDebit,
 } from "@/lib/db";
 import { getSessionSteamId } from "@/lib/session";
+import { logEvent } from "@/lib/events";
 import {
   parseTradeUrl,
   sbBuyById,
@@ -29,7 +28,6 @@ import type { BuyResponse, CatalogItem } from "@/lib/types";
 
 export const runtime = "nodejs";
 
-// Offer statuses that mean the purchase definitively did not / will not deliver.
 const FAILED_OFFER = new Set([
   "canceled",
   "timeout",
@@ -40,9 +38,6 @@ const FAILED_OFFER = new Set([
   "rollback_supplier",
 ]);
 
-// Allowed drift between the price the user was shown and the current server
-// price before we ask them to re-confirm (0.5%, min 1 cent). Guards against
-// the demo/live price wobble charging a different amount than displayed.
 function priceMismatch(expected: number, current: number): boolean {
   return Math.abs(expected - current) > Math.max(1, Math.round(current * 0.005));
 }
@@ -61,10 +56,7 @@ export async function POST(request: Request): Promise<Response> {
     let itemId: unknown;
     let expectedPriceCents: number | undefined;
     try {
-      const body = (await request.json()) as {
-        itemId?: unknown;
-        expectedPriceCents?: unknown;
-      };
+      const body = (await request.json()) as { itemId?: unknown; expectedPriceCents?: unknown };
       itemId = body?.itemId;
       if (typeof body?.expectedPriceCents === "number" && Number.isFinite(body.expectedPriceCents)) {
         expectedPriceCents = Math.round(body.expectedPriceCents);
@@ -77,14 +69,11 @@ export async function POST(request: Request): Promise<Response> {
     }
 
     const item = await getItemById(itemId);
-    if (!item) {
-      return json({ ok: false, error: "Предмет не найден" }, 404);
-    }
+    if (!item) return json({ ok: false, error: "Предмет не найден" }, 404);
     if (item.available === false || item.priceCents <= 0) {
       return json({ ok: false, error: "Предмет сейчас недоступен для покупки" }, 409);
     }
 
-    // Price the user saw must still match (protects against wobble / live moves).
     if (expectedPriceCents !== undefined && priceMismatch(expectedPriceCents, item.priceCents)) {
       return json(
         {
@@ -97,48 +86,74 @@ export async function POST(request: Request): Promise<Response> {
       );
     }
 
-    // ---- DEMO MODE: instant delivery from fake balance -------------------
-    if (!isSkinsbackLive()) {
-      if (!tryDebit(steamId, item.priceCents)) {
-        return json({ ok: false, error: "Недостаточно средств" }, 402);
-      }
-      const order = createOrder({
-        userSteamId: steamId,
-        itemId: item.id,
-        itemName: item.name,
-        priceCents: item.priceCents,
-        status: "demo_delivered",
-      });
-      const newBalanceCents = getUser(steamId)?.balance_cents ?? 0;
-      return json({ ok: true, order, newBalanceCents });
+    const user = getUser(steamId);
+
+    // Trade link is mandatory — warn the user explicitly if it's missing.
+    if (!user?.trade_url) {
+      return json(
+        {
+          ok: false,
+          needsTradeUrl: true,
+          error: "Укажите трейд-ссылку Steam — без неё мы не сможем отправить предмет.",
+        },
+        400,
+      );
+    }
+    const trade = parseTradeUrl(user.trade_url);
+    if (!trade) {
+      return json(
+        {
+          ok: false,
+          needsTradeUrl: true,
+          error: "Трейд-ссылка в профиле некорректна — обновите её и попробуйте снова.",
+        },
+        400,
+      );
     }
 
-    // ---- LIVE MODE: real Skinsback purchase ------------------------------
-    return await liveBuy(steamId, item);
+    // Balance check before anything else (no debit yet).
+    if (user.balance_cents < item.priceCents) {
+      return json(
+        {
+          ok: false,
+          needsDeposit: true,
+          error: "Недостаточно средств. Пополните баланс, чтобы купить предмет.",
+        },
+        402,
+      );
+    }
+
+    // Delivery requires Skinsback to be connected.
+    if (!isSkinsbackLive()) {
+      return json(
+        {
+          ok: false,
+          fulfillmentUnavailable: true,
+          error: "Выдача предметов ещё подключается. Покупка временно недоступна.",
+        },
+        503,
+      );
+    }
+
+    await logEvent(request, {
+      steamId,
+      type: "buy_attempt",
+      meta: { itemId: item.id, itemName: item.name, priceCents: item.priceCents },
+    });
+
+    return await liveBuy(steamId, item, trade);
   } catch (err) {
     console.error("[buy] unhandled error:", err);
     return json({ ok: false, error: "Внутренняя ошибка сервера" }, 500);
   }
 }
 
-async function liveBuy(steamId: string, item: CatalogItem): Promise<Response> {
-  const user = getUser(steamId);
-  if (!user?.trade_url) {
-    return json(
-      { ok: false, error: "Укажите трейд-ссылку Steam в профиле, чтобы получать предметы" },
-      400,
-    );
-  }
-  const trade = parseTradeUrl(user.trade_url);
-  if (!trade) {
-    return json(
-      { ok: false, error: "Трейд-ссылка в профиле некорректна — обновите её и попробуйте снова" },
-      400,
-    );
-  }
-
-  // Find a purchasable offer BEFORE debiting, so an out-of-stock item never
-  // touches the balance (no debit/refund churn).
+async function liveBuy(
+  steamId: string,
+  item: CatalogItem,
+  trade: { partner: string; token: string },
+): Promise<Response> {
+  // Find a purchasable offer BEFORE debiting.
   let cheapestId: string;
   let cheapestPriceUsd: number;
   try {
@@ -161,7 +176,6 @@ async function liveBuy(steamId: string, item: CatalogItem): Promise<Response> {
     return json({ ok: false, error: "Магазин временно недоступен, попробуйте позже" }, 502);
   }
 
-  // Guard against paying materially more than the displayed price.
   const maxPriceUsd = (item.priceCents / 100) * 1.07; // 7% slippage cap
   if (cheapestPriceUsd > maxPriceUsd) {
     return json(
@@ -176,7 +190,10 @@ async function liveBuy(steamId: string, item: CatalogItem): Promise<Response> {
   }
 
   if (!tryDebit(steamId, item.priceCents)) {
-    return json({ ok: false, error: "Недостаточно средств" }, 402);
+    return json(
+      { ok: false, needsDeposit: true, error: "Недостаточно средств. Пополните баланс." },
+      402,
+    );
   }
 
   const customId = randomUUID();
@@ -203,15 +220,10 @@ async function liveBuy(steamId: string, item: CatalogItem): Promise<Response> {
     const newBalanceCents = getUser(steamId)?.balance_cents ?? 0;
     return json({ ok: true, order: freshOrder, newBalanceCents });
   } catch (err) {
-    // Definitive API rejection: no purchase was made → atomic single refund.
     if (err instanceof SkinsbackApiError) {
       failAndRefundOnce(customId);
       return json({ ok: false, error: "Не удалось купить предмет, средства возвращены" }, 502);
     }
-
-    // Ambiguous failure (timeout/network/parse): the purchase MAY have gone
-    // through. Do NOT blind-refund. Try to reconcile once; otherwise leave the
-    // order pending for the webhook / a later status check to settle.
     console.warn("[buy] ambiguous market_buy failure, reconciling:", err);
     try {
       const info = await sbOrderInfo(customId);
@@ -220,13 +232,10 @@ async function liveBuy(steamId: string, item: CatalogItem): Promise<Response> {
         failAndRefundOnce(customId);
         return json({ ok: false, error: "Покупка не удалась, средства возвращены" }, 502);
       }
-      // Purchase exists and is progressing.
       advanceOrderStatus(customId, "processing");
       const freshOrder = getOrderById(order.id) ?? { ...order, status: "processing" as const };
       return json({ ok: true, pending: true, order: freshOrder });
     } catch {
-      // Could not confirm either way: keep the order pending (no refund). The
-      // webhook, or a reconciliation pass, will finalize it.
       return json(
         {
           ok: false,

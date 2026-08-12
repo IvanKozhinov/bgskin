@@ -5,7 +5,14 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import type { Order, OrderStatus, SessionUser } from "@/lib/types";
+import type {
+  Deposit,
+  DepositStatus,
+  Order,
+  OrderStatus,
+  PaymentMethodId,
+  SessionUser,
+} from "@/lib/types";
 import { formatPrice } from "@/lib/types";
 
 const TRADE_URL_RE =
@@ -20,11 +27,37 @@ const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
     label: "Ошибка (средства возвращены)",
     cls: "border-neg/40 text-neg bg-neg/10",
   },
-  demo_delivered: { label: "Доставлен (демо)", cls: "border-pos/40 text-pos bg-pos/10" },
+  demo_delivered: { label: "Доставлен", cls: "border-pos/40 text-pos bg-pos/10" },
 };
 
 function StatusBadge({ status }: { status: OrderStatus }) {
   const meta = STATUS_META[status];
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}
+    >
+      {meta.label}
+    </span>
+  );
+}
+
+const DEPOSIT_STATUS_META: Record<DepositStatus, { label: string; cls: string }> = {
+  created: { label: "Ожидает", cls: "border-line text-ink-dim bg-panel-2" },
+  pending: { label: "Ожидает", cls: "border-line text-ink-dim bg-panel-2" },
+  paid: { label: "Зачислено", cls: "border-pos/40 text-pos bg-pos/10" },
+  failed: { label: "Ошибка", cls: "border-neg/40 text-neg bg-neg/10" },
+  canceled: { label: "Отменено", cls: "border-line text-ink-faint bg-panel-2" },
+};
+
+const DEPOSIT_METHOD_LABELS: Record<PaymentMethodId, string> = {
+  sbp: "СБП",
+  card: "Банковская карта",
+  stripe: "Stripe",
+  heleket: "Криптовалюта (Heleket)",
+};
+
+function DepositStatusBadge({ status }: { status: DepositStatus }) {
+  const meta = DEPOSIT_STATUS_META[status];
   return (
     <span
       className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium ${meta.cls}`}
@@ -66,6 +99,8 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [ordersError, setOrdersError] = useState(false);
 
+  const [deposits, setDeposits] = useState<Deposit[] | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     fetch("/api/orders")
@@ -81,6 +116,24 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
           setOrdersError(true);
           setOrders([]);
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/deposits")
+      .then((r) => {
+        if (!r.ok) throw new Error(String(r.status));
+        return r.json() as Promise<{ deposits: Deposit[] }>;
+      })
+      .then((d) => {
+        if (!cancelled) setDeposits(d.deposits);
+      })
+      .catch(() => {
+        if (!cancelled) setDeposits([]);
       });
     return () => {
       cancelled = true;
@@ -182,17 +235,63 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
               </div>
             </div>
           </div>
-          <div className="shrink-0 rounded-xl border border-pos/25 bg-pos/5 px-5 py-3 text-center sm:text-right">
+          <div className="shrink-0 rounded-xl border border-pos/25 bg-pos/5 px-5 py-4 text-center">
             <p className="text-xs uppercase tracking-wider text-ink-faint">Баланс</p>
             <p className="mt-1 font-display text-3xl font-bold text-pos">
               {formatPrice(user.balanceCents)}
             </p>
+            <Link href="/wallet" className="btn-primary mt-3 w-full !py-2 text-sm">
+              Пополнить баланс
+            </Link>
           </div>
         </div>
       </motion.section>
 
-      {/* Trade URL */}
+      {/* Recent deposits */}
       <motion.section {...cardMotion(0.08)} className="panel mt-5 p-6">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="font-display text-lg font-bold">Последние пополнения</h2>
+          <Link
+            href="/wallet"
+            className="text-sm font-medium text-accent transition-colors hover:text-accent-hot"
+          >
+            Пополнить →
+          </Link>
+        </div>
+
+        {deposits === null ? (
+          <div className="mt-4 space-y-2">
+            <div className="skeleton h-11" />
+            <div className="skeleton h-11" />
+          </div>
+        ) : deposits.length === 0 ? (
+          <p className="mt-4 rounded-xl border border-dashed border-line px-6 py-8 text-center text-ink-dim">
+            Пополнений пока нет
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-line">
+            {deposits.slice(0, 5).map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="font-display font-bold text-pos">
+                    {formatPrice(d.amountCents)}
+                  </span>
+                  <span className="truncate text-sm text-ink-dim">
+                    {DEPOSIT_METHOD_LABELS[d.method] ?? d.method}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <DepositStatusBadge status={d.status} />
+                  <span className="text-xs text-ink-faint">{orderDate(d.createdAt)}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </motion.section>
+
+      {/* Trade URL */}
+      <motion.section {...cardMotion(0.16)} className="panel mt-5 p-6">
         <h2 className="font-display text-lg font-bold">Трейд-ссылка</h2>
         <p className="mt-1 text-sm text-ink-dim">
           Нужна, чтобы бот мог отправить вам предложение обмена с купленным предметом.
@@ -266,7 +365,7 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
       </motion.section>
 
       {/* Orders */}
-      <motion.section {...cardMotion(0.16)} className="panel mt-5 p-6">
+      <motion.section {...cardMotion(0.24)} className="panel mt-5 p-6">
         <h2 className="font-display text-lg font-bold">История покупок</h2>
 
         {orders === null ? (

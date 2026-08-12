@@ -1,4 +1,5 @@
 import { setTradeUrl } from "@/lib/db";
+import { logEvent } from "@/lib/events";
 import { getSessionSteamId } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -36,5 +37,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   setTradeUrl(steamId, tradeUrl);
+  await logEvent(request, { steamId, type: "tradeurl_set" });
   return Response.json({ ok: true });
 }

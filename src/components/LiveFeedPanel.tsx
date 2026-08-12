@@ -3,7 +3,6 @@
 // Larger vertical live-feed panel for the landing page: header with a pulsing
 // dot, last ~8 purchase rows with item image, masked buyer, rarity-colored
 // item name, price and a relative timestamp refreshed every 30 s.
-// Feed is simulated (demo social proof).
 
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
@@ -31,10 +30,7 @@ export default function LiveFeedPanel() {
 
   return (
     <section className="panel overflow-hidden">
-      <div
-        className="flex items-center gap-2.5 border-b border-line px-5 py-4"
-        title="Демо-лента: события симулируются"
-      >
+      <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
         <span className="live-dot" />
         <h2 className="font-display text-lg font-bold tracking-wide">
           Лайв-лента

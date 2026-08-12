@@ -4,6 +4,7 @@ import "./globals.css";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FeedTicker from "@/components/FeedTicker";
+import Track from "@/components/Track";
 
 const chakra = Chakra_Petch({
   variable: "--font-chakra",
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="ru" className={`${chakra.variable} ${inter.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
+        <Track />
         <Header />
         <FeedTicker />
         <main className="flex-1">{children}</main>

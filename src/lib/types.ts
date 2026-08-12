@@ -114,7 +114,94 @@ export interface FeedEvent {
 
 export interface MeResponse {
   user: SessionUser | null;
-  demo: boolean; // true when Skinsback keys are absent
+}
+
+// ---- Payments / deposits -----------------------------------------------------
+
+export type PaymentMethodId = "sbp" | "card" | "stripe" | "heleket";
+
+export interface PaymentMethodInfo {
+  id: PaymentMethodId;
+  label: string;
+  description: string;
+  /** Provider keys present → real hosted checkout available. */
+  configured: boolean;
+}
+
+export type DepositStatus =
+  | "created" // record created, awaiting provider redirect
+  | "pending" // provider not configured yet, or awaiting payment
+  | "paid" // provider confirmed payment; balance credited
+  | "failed"
+  | "canceled";
+
+export interface Deposit {
+  id: number;
+  amountCents: number;
+  method: PaymentMethodId;
+  status: DepositStatus;
+  createdAt: string;
+}
+
+export interface DepositResponse {
+  ok: boolean;
+  error?: string;
+  deposit?: Deposit;
+  /** When the provider is configured, the hosted-checkout URL to redirect to. */
+  checkoutUrl?: string;
+  /** True when the method has no keys yet — UI shows an "onboarding" state. */
+  awaitingProvider?: boolean;
+}
+
+// ---- Admin -------------------------------------------------------------------
+
+export interface UserEvent {
+  id: number;
+  steamId: string | null;
+  type: string; // "login" | "logout" | "buy" | "deposit" | "tradeurl" | "pageview" | ...
+  ip: string | null;
+  country: string | null; // ISO-3166 alpha-2, e.g. "RU"
+  countryName: string | null;
+  path: string | null;
+  meta: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface AdminUserRow {
+  steamId: string;
+  name: string;
+  avatar: string;
+  balanceCents: number;
+  tradeUrl: string | null;
+  createdAt: string;
+  lastIp: string | null;
+  lastCountry: string | null;
+  eventCount: number;
+  orderCount: number;
+}
+
+export interface Policy {
+  slug: string; // "terms" | "privacy" | "refund" | "aml" | custom
+  title: string;
+  bodyMd: string; // Markdown source
+  published: boolean;
+  showInFaq: boolean;
+  sortOrder: number;
+  updatedAt: string;
+}
+
+export interface FeedConfig {
+  enabled: boolean;
+  minIntervalMs: number;
+  maxIntervalMs: number;
+  backlogSize: number; // pre-seeded events shown on load
+  ringSize: number; // events retained in memory
+  maskNicks: boolean;
+  cheapBias: number; // 0..1 — share of picks biased to cheaper items
+  cheapThresholdCents: number; // "cheap" cutoff for the bias
+  minPriceCents: number; // only surface items at/above this price
+  maxPriceCents: number; // 0 = no cap
+  nicks: string[]; // buyer nickname pool
 }
 
 export interface BuyResponse {
@@ -125,8 +212,14 @@ export interface BuyResponse {
   /** Set when the store price moved since the item was shown; client re-confirms. */
   priceChanged?: boolean;
   currentPriceCents?: number;
-  /** Live mode: purchase is in flight and not yet confirmed; balance NOT refunded. */
+  /** Purchase is in flight and not yet confirmed; balance NOT refunded. */
   pending?: boolean;
+  /** User has no trade link — the client must prompt for it before buying. */
+  needsTradeUrl?: boolean;
+  /** Balance too low — the client should route the user to top-up. */
+  needsDeposit?: boolean;
+  /** Item delivery isn't available yet (Skinsback not connected). */
+  fulfillmentUnavailable?: boolean;
 }
 
 export function formatPrice(cents: number): string {

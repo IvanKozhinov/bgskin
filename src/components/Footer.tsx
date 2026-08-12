@@ -1,6 +1,13 @@
+// Site footer (server component). Documents column is built from the published
+// policies. Admin-route exclusion is handled by the layout/header chrome, not
+// here — do not add usePathname logic to this file.
+
 import Link from "next/link";
+import { footerPolicies } from "@/lib/policies";
 
 export default function Footer() {
+  const policies = footerPolicies();
+
   return (
     <footer className="mt-20 border-t border-line bg-bg-elevated">
       <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
@@ -29,23 +36,30 @@ export default function Footer() {
               <Link href="/market" className="text-ink-dim transition-colors hover:text-accent">
                 Маркет
               </Link>
-              <Link href="/profile" className="text-ink-dim transition-colors hover:text-accent">
-                Профиль
+              <Link href="/wallet" className="text-ink-dim transition-colors hover:text-accent">
+                Кошелёк
+              </Link>
+              <Link href="/faq" className="text-ink-dim transition-colors hover:text-accent">
+                FAQ
               </Link>
             </div>
             <div className="flex flex-col gap-2">
               <span className="mb-1 font-display text-xs font-semibold uppercase tracking-widest text-ink-faint">
-                Поддержка
+                Документы
               </span>
-              <a
-                href="https://steamcommunity.com/tradeoffer/new/"
-                target="_blank"
-                rel="noreferrer"
-                className="text-ink-dim transition-colors hover:text-accent"
-              >
-                Мой Trade URL
-              </a>
-              <span className="cursor-default text-ink-dim">support@bgaskins.cc</span>
+              {policies.length === 0 ? (
+                <span className="cursor-default text-ink-faint">—</span>
+              ) : (
+                policies.map((p) => (
+                  <Link
+                    key={p.slug}
+                    href={`/policy/${p.slug}`}
+                    className="text-ink-dim transition-colors hover:text-accent"
+                  >
+                    {p.title}
+                  </Link>
+                ))
+              )}
             </div>
           </div>
         </div>

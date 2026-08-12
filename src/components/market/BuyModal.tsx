@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion } from "framer-motion";
@@ -7,9 +8,19 @@ import type { CatalogItem, MeResponse, BuyResponse, Order } from "@/lib/types";
 import { formatPrice, rarityColor } from "@/lib/types";
 import { onImgError } from "@/lib/img";
 
-type View = "loading" | "login" | "tradeurl" | "confirm" | "buying" | "success" | "error";
+type View =
+  | "loading"
+  | "login"
+  | "tradeurl"
+  | "confirm"
+  | "buying"
+  | "success"
+  | "error"
+  | "deposit"
+  | "unavailable";
 
 const TRADE_URL_HELP = "https://steamcommunity.com/tradeoffer/new/";
+const TRADE_URL_WARNING = "Укажите трейд-ссылку, иначе мы не сможем отправить предмет";
 
 function isValidTradeUrl(v: string): boolean {
   return (
@@ -58,7 +69,7 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
         if (cancelled) return;
         setMe(d);
         if (!d.user) setView("login");
-        else if (!d.user.tradeUrl && !d.demo) setView("tradeurl");
+        else if (!d.user.tradeUrl) setView("tradeurl");
         else setView("confirm");
       })
       .catch(() => {
@@ -135,6 +146,27 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
         setPriceOverride(d.currentPriceCents);
         setNotice(`Цена обновилась до ${formatPrice(d.currentPriceCents)}. Подтвердите покупку заново.`);
         setView("confirm");
+        return;
+      }
+
+      // Trade link missing/invalid — force the trade-URL prompt (the view always
+      // shows the warning banner).
+      if (d.needsTradeUrl) {
+        setMe((m) => (m && m.user ? { ...m, user: { ...m.user, tradeUrl: null } } : m));
+        setTuError(null);
+        setView("tradeurl");
+        return;
+      }
+
+      // Balance too low — route the user to the wallet top-up.
+      if (d.needsDeposit) {
+        setView("deposit");
+        return;
+      }
+
+      // Delivery not wired up yet.
+      if (d.fulfillmentUnavailable) {
+        setView("unavailable");
         return;
       }
 
@@ -237,7 +269,10 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
         {view === "tradeurl" && (
           <div>
             <h3 className="pr-8 font-display text-lg font-bold">Укажите Trade URL</h3>
-            <p className="mt-1.5 text-sm text-ink-dim">
+            <p className="mt-3 rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-accent">
+              {TRADE_URL_WARNING}
+            </p>
+            <p className="mt-3 text-sm text-ink-dim">
               Чтобы отправить предмет, нам нужна ваша ссылка на обмен Steam.{" "}
               <a
                 href={TRADE_URL_HELP}
@@ -337,26 +372,27 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
                 Недостаточно средств на балансе
               </p>
             )}
-            {me?.demo && (
-              <p className="mt-3 text-xs text-violet">
-                Демо-режим: покупка симулируется, баланс и заказы — тестовые.
-              </p>
-            )}
 
-            <button
-              type="button"
-              className="btn-primary mt-5 w-full"
-              disabled={insufficient || busy}
-              onClick={() => void buy()}
-            >
-              {busy ? (
-                <>
-                  <Spinner /> Покупаем…
-                </>
-              ) : (
-                "Подтвердить покупку"
-              )}
-            </button>
+            {insufficient ? (
+              <Link href="/wallet" className="btn-primary mt-5 w-full" onClick={onClose}>
+                Пополнить баланс
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="btn-primary mt-5 w-full"
+                disabled={busy}
+                onClick={() => void buy()}
+              >
+                {busy ? (
+                  <>
+                    <Spinner /> Покупаем…
+                  </>
+                ) : (
+                  "Подтвердить покупку"
+                )}
+              </button>
+            )}
           </div>
         )}
 
@@ -373,25 +409,53 @@ export default function BuyModal({ item, onClose }: { item: CatalogItem; onClose
               </svg>
             </motion.div>
             <h3 className="mt-4 font-display text-xl font-bold">
-              {me?.demo
-                ? "Куплено (демо-режим)!"
-                : pending
-                  ? "Покупка обрабатывается"
-                  : "Покупка оформлена!"}
+              {pending ? "Покупка обрабатывается" : "Покупка оформлена!"}
             </h3>
             <p className="mt-1 text-sm text-ink-dim">
               {item.name} — {formatPrice(price)}
             </p>
-            {!me?.demo && (
-              <p className="mt-2 text-xs text-ink-faint">
-                {pending
-                  ? "Мы создаём трейд-оффер. Он придёт в Steam в течение нескольких минут — статус можно отслеживать в профиле."
-                  : "Создаём трейд-оффер — примите его в Steam, чтобы забрать предмет."}
-              </p>
-            )}
+            <p className="mt-2 text-xs text-ink-faint">
+              {pending
+                ? "Мы создаём трейд-оффер. Он придёт в Steam в течение нескольких минут — статус можно отслеживать в профиле."
+                : "Создаём трейд-оффер — примите его в Steam, чтобы забрать предмет."}
+            </p>
             {order && <p className="mt-1 text-xs text-ink-faint">Заказ #{order.id}</p>}
             <button type="button" className="btn-primary mt-5 w-full" onClick={onClose}>
               Отлично
+            </button>
+          </div>
+        )}
+
+        {view === "deposit" && (
+          <div className="flex flex-col items-center py-4 text-center">
+            <div className="grid h-16 w-16 place-items-center rounded-full bg-neg/15 text-neg">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h13A2.5 2.5 0 0 1 21 8.5v7A2.5 2.5 0 0 1 18.5 18h-13A2.5 2.5 0 0 1 3 15.5v-7Z" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M15 12h3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+            </div>
+            <h3 className="mt-4 font-display text-xl font-bold">Недостаточно средств</h3>
+            <p className="mt-1 text-sm text-ink-dim">
+              Пополните баланс, чтобы купить «{item.name}» за {formatPrice(price)}.
+            </p>
+            <Link href="/wallet" className="btn-primary mt-5 w-full" onClick={onClose}>
+              Пополнить баланс
+            </Link>
+          </div>
+        )}
+
+        {view === "unavailable" && (
+          <div className="flex flex-col items-center py-4 text-center">
+            <div className="grid h-16 w-16 place-items-center rounded-full bg-accent/15 text-accent">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
+                <path d="M12 8h.01M11 12h1v4h1" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+            <h3 className="mt-4 font-display text-xl font-bold">Выдача подключается</h3>
+            <p className="mt-1 text-sm text-ink-dim">Выдача предметов скоро будет доступна.</p>
+            <button type="button" className="btn-primary mt-5 w-full" onClick={onClose}>
+              Понятно
             </button>
           </div>
         )}

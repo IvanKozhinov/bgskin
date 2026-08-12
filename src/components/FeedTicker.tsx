@@ -2,9 +2,10 @@
 
 // Thin live-feed strip under the header: LIVE label + horizontally scrolled
 // row of compact purchase chips. Newest prepends on the left with a
-// framer-motion layout/slide animation. Feed is simulated (demo social proof).
+// framer-motion layout/slide animation.
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice } from "@/lib/types";
 import { useFeed } from "./useFeed";
@@ -12,15 +13,15 @@ import { useFeed } from "./useFeed";
 const VISIBLE = 12;
 
 export default function FeedTicker() {
+  const pathname = usePathname();
   const events = useFeed(VISIBLE);
+
+  if (pathname?.startsWith("/admin")) return null;
 
   return (
     <div className="h-12 border-b border-line bg-bg-elevated/60">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-4 px-4 sm:px-6">
-        <div
-          className="flex shrink-0 items-center gap-2"
-          title="Демо-лента: события симулируются"
-        >
+        <div className="flex shrink-0 items-center gap-2">
           <span className="live-dot" />
           <span className="font-display text-xs font-bold tracking-widest text-pos">
             LIVE

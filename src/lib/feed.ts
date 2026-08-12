@@ -1,95 +1,15 @@
-// Fictional live purchase feed (simulated social proof).
-// A globalThis singleton generates fake purchase events from real catalog items
-// every 2.5–9 s, keeps a ring buffer of the last 60 and fans events out to
-// SSE subscribers. Started lazily on first access; survives HMR without
-// duplicating timers (handle is stored on globalThis and cleared before re-arming).
+// Live purchase feed. A globalThis singleton generates purchase events from real
+// catalog items on a configurable cadence, keeps a ring buffer and fans events
+// out to SSE subscribers. All behaviour (cadence, nick pool, masking, price
+// filters, on/off) is driven by the admin-editable config in feedcfg.ts, read
+// fresh on every tick so changes apply without a restart.
 
 import { getAllItems } from "@/lib/catalog";
+import { getFeedConfig } from "@/lib/feedcfg";
 import type { CatalogItem, FeedEvent } from "@/lib/types";
 
-const MIN_DELAY_MS = 2_500;
-const MAX_DELAY_MS = 9_000;
-const BUFFER_SIZE = 60;
-const SEED_COUNT = 25;
 const SEED_SPAN_MS = 20 * 60 * 1000; // seed events are backdated over the last 20 min
-const CHEAP_THRESHOLD_CENTS = 5_000; // "$50"
-const CHEAP_PICK_PROBABILITY = 0.7; // 70% of picks come from the cheap pool
 const FALLBACK_PRICE_CENTS = 500; // guard: prices may be 0 before the price merge
-
-/** ~70 realistic Russian/English gaming nicknames (fictional). */
-const NICKS: readonly string[] = [
-  "S1mpleKiller",
-  "xX_Predator_Xx",
-  "KolyaOgon",
-  "HeadshotMachine",
-  "NoScopeNikita",
-  "VandalHunter",
-  "RushBcyka",
-  "Tox1cWolf",
-  "DimaFragger",
-  "GhostRider777",
-  "KrylovTop",
-  "SnayperVanya",
-  "MaxPayneRU",
-  "BorisBlade",
-  "ZloyPingvin",
-  "FlickMaster",
-  "AWPLordRU",
-  "SmokeCriminal",
-  "One_Tap_God",
-  "PashaZigZag",
-  "CyberSova",
-  "NightStalkerX",
-  "JukeKing",
-  "MolotovMisha",
-  "StaryiVolk",
-  "EcoWarrior",
-  "KennyFanBoy",
-  "DeagleDima",
-  "SilverSurferRU",
-  "GromovS",
-  "BaitMaster2000",
-  "ClutchOrKick",
-  "SanyaTurbo",
-  "PixelHunter",
-  "WallbangWizard",
-  "RostovRambo",
-  "FastFingers",
-  "LuckyLeha",
-  "QuietStorm",
-  "BunnyHopper",
-  "MirageMaster",
-  "InfernoDemon",
-  "TrainRusher",
-  "DustDevilRU",
-  "CacheKing",
-  "OverpassOgre",
-  "NukeNikola",
-  "VertigoViking",
-  "AncientAztec",
-  "AnubisPharaoh",
-  "SteamSammy",
-  "TiltedTolik",
-  "RagingBull",
-  "IceColdIgor",
-  "MoscowMauler",
-  "PiterPunisher",
-  "SibirSniper",
-  "UralUltra",
-  "KazanKrusher",
-  "OmskOverlord",
-  "NovosibNinja",
-  "VolgaViper",
-  "DonDestroyer",
-  "BaltikaBrawler",
-  "TundraTiger",
-  "TaigaTerror",
-  "PolarPavel",
-  "CosmoCossack",
-  "RedlineRider",
-  "AsiimovAce",
-  "Kolyan228",
-];
 
 interface FeedState {
   /** Ring buffer, oldest → newest. */
@@ -125,22 +45,35 @@ function effectivePrice(item: CatalogItem): number {
   return item.priceCents > 0 ? item.priceCents : FALLBACK_PRICE_CENTS;
 }
 
-/** Random item, weighted toward cheaper (70% under $50) and more popular items. */
+/** Random item, weighted toward cheaper and more popular items, per config. */
 function pickItem(items: CatalogItem[]): CatalogItem {
-  const cheap = items.filter((i) => effectivePrice(i) < CHEAP_THRESHOLD_CENTS);
-  const pool =
-    cheap.length > 0 && Math.random() < CHEAP_PICK_PROBABILITY ? cheap : items;
+  const cfg = getFeedConfig();
+  let pool = items;
+  if (cfg.minPriceCents > 0 || cfg.maxPriceCents > 0) {
+    const filtered = items.filter((i) => {
+      const p = effectivePrice(i);
+      if (cfg.minPriceCents > 0 && p < cfg.minPriceCents) return false;
+      if (cfg.maxPriceCents > 0 && p > cfg.maxPriceCents) return false;
+      return true;
+    });
+    if (filtered.length > 0) pool = filtered;
+  }
+  const cheap = pool.filter((i) => effectivePrice(i) < cfg.cheapThresholdCents);
+  const usePool = cheap.length > 0 && Math.random() < cfg.cheapBias ? cheap : pool;
   // Popularity bias: draw two candidates, keep the more popular one.
-  const a = pool[Math.floor(Math.random() * pool.length)];
-  const b = pool[Math.floor(Math.random() * pool.length)];
+  const a = usePool[Math.floor(Math.random() * usePool.length)];
+  const b = usePool[Math.floor(Math.random() * usePool.length)];
   return b.popularity > a.popularity ? b : a;
 }
 
 function makeEvent(item: CatalogItem, ts: number): FeedEvent {
+  const cfg = getFeedConfig();
+  const nicks = cfg.nicks.length > 0 ? cfg.nicks : ["Player"];
+  const raw = nicks[Math.floor(Math.random() * nicks.length)];
   return {
     id: crypto.randomUUID(),
     kind: "purchase",
-    buyer: maskNick(NICKS[Math.floor(Math.random() * NICKS.length)]),
+    buyer: cfg.maskNicks ? maskNick(raw) : raw,
     itemId: item.id,
     itemName: item.name,
     weapon: item.weapon,
@@ -152,9 +85,10 @@ function makeEvent(item: CatalogItem, ts: number): FeedEvent {
 }
 
 function pushEvent(state: FeedState, e: FeedEvent): void {
+  const ring = getFeedConfig().ringSize;
   state.buffer.push(e);
-  if (state.buffer.length > BUFFER_SIZE) {
-    state.buffer.splice(0, state.buffer.length - BUFFER_SIZE);
+  if (state.buffer.length > ring) {
+    state.buffer.splice(0, state.buffer.length - ring);
   }
   for (const cb of state.subscribers) {
     try {
@@ -168,10 +102,10 @@ function pushEvent(state: FeedState, e: FeedEvent): void {
 /** Pre-fill the buffer with backdated events so the UI is full immediately. */
 function seedBuffer(state: FeedState): void {
   const now = Date.now();
-  const offsets = Array.from(
-    { length: SEED_COUNT },
-    () => Math.random() * SEED_SPAN_MS,
-  ).sort((a, b) => b - a); // descending offset → ascending timestamps (oldest first)
+  const count = getFeedConfig().backlogSize;
+  const offsets = Array.from({ length: count }, () => Math.random() * SEED_SPAN_MS).sort(
+    (a, b) => b - a,
+  ); // descending offset → ascending timestamps (oldest first)
   for (const offset of offsets) {
     state.buffer.push(makeEvent(pickItem(state.items), now - offset));
   }
@@ -181,15 +115,17 @@ function scheduleNext(state: FeedState): void {
   // The handle lives on globalThis: clearing before re-creating guarantees a
   // single timer chain even across dev HMR module reloads.
   if (state.timer) clearTimeout(state.timer);
-  const delay = MIN_DELAY_MS + Math.random() * (MAX_DELAY_MS - MIN_DELAY_MS);
+  const cfg = getFeedConfig();
+  const delay = cfg.minIntervalMs + Math.random() * (cfg.maxIntervalMs - cfg.minIntervalMs);
   const handle = setTimeout(() => {
-    if (state.items.length > 0) {
+    // Emit only when enabled — a disabled feed keeps its buffer but goes quiet.
+    if (getFeedConfig().enabled && state.items.length > 0) {
       pushEvent(state, makeEvent(pickItem(state.items), Date.now()));
     }
     scheduleNext(state);
   }, delay);
   if (typeof handle === "object" && handle !== null && "unref" in handle) {
-    handle.unref(); // never keep the process alive just for the fake feed
+    handle.unref(); // never keep the process alive just for the live feed
   }
   state.timer = handle;
 }

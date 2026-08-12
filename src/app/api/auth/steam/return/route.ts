@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { siteUrl } from "@/lib/config";
 import { getUser, upsertUser } from "@/lib/db";
+import { logEvent } from "@/lib/events";
 import { createSession } from "@/lib/session";
 import { fetchSteamProfile, verifySteamCallback } from "@/lib/steam";
 
@@ -24,6 +25,7 @@ export async function GET(request: Request): Promise<Response> {
   // createSession sets the httpOnly cookie via cookies(), which is writable
   // inside route handlers; the cookie rides along with the redirect response.
   await createSession(steamId);
+  await logEvent(request, { steamId, type: "login" });
 
   return NextResponse.redirect(`${siteUrl()}/`, 302);
 }
