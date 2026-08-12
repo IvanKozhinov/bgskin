@@ -1,36 +1,52 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# BGASkins.cc
 
-## Getting Started
+Витрина продажи скинов CS2: Steam-авторизация, живой каталог с фильтрами и поиском,
+лайв-лента покупок, интеграция Skinsback (автообновление цен + вывод предметов трейд-оффером).
 
-First, run the development server:
+Стек: Next.js 16 (App Router) · TypeScript · Tailwind v4 · SQLite (better-sqlite3) · framer-motion.
+
+## Быстрый старт
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npx tsx scripts/fetch-catalog.ts   # скачать актуальный каталог предметов CS2 (~2000 скинов)
+npm run dev                        # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Без единого ключа проект работает в **демо-режиме**: цены детерминированно-фиктивные
+(слегка «дышат» каждые 10 минут), новым пользователям начисляется $100 демо-баланса,
+покупка мгновенно создаёт заказ со статусом «Доставлен (демо)». Лайв-лента покупок —
+симуляция (по ТЗ), генерируется сервером из реальных предметов каталога.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Режимы и ключи (`.env.local`, см. `.env.example`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Ключ | Что включает |
+|---|---|
+| `SITE_URL` | Публичный URL (для Steam OpenID return URL). Локально — `http://localhost:3000` |
+| `SESSION_SECRET` | Подпись сессионных куки (обязательно смените в проде) |
+| `STEAM_API_KEY` | Ник/аватар через официальный Web API (без ключа — keyless-fоллбек) |
+| `SKINSBACK_SHOP_ID` + `SKINSBACK_SECRET` | **LIVE-режим**: реальный прайс Skinsback (автообновление каждые 10 мин) и реальный вывод предметов через `market_buy` |
+| `OPENROUTER_API_KEY` | Генерация фирменных артов (GPT Image 2): `npx tsx scripts/generate-art.ts` |
 
-## Learn More
+Вебхук Skinsback (статусы трейдов): укажите в кабинете Skinsback URL
+`<SITE_URL>/api/skinsback/callback` — подпись проверяется (HMAC-SHA256 от raw body).
 
-To learn more about Next.js, take a look at the following resources:
+## Что где
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `src/lib/` — ядро: `catalog` (каталог+цены), `skinsback` (API-клиент), `steam` (OpenID),
+  `feed` (лайв-лента), `db`, `session`, `prices`, `config`
+- `src/app/api/` — REST: `catalog`, `feed` (SSE), `buy`, `orders`, `auth/steam/*`, `me`,
+  `user/tradeurl`, `skinsback/callback`
+- `src/app/` — страницы: `/` (лендинг), `/market`, `/item/[id]`, `/profile`
+- `scripts/fetch-catalog.ts` — обновление каталога из ByMykel/CSGO-API
+- `scripts/generate-art.ts` — арты через OpenRouter (GPT Image 2)
+- `data/` — `catalog.json`, `bgaskins.db` (SQLite, создаётся автоматически)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Продакшен
 
-## Deploy on Vercel
+```bash
+npm run build && npm run start
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Домена пока нет — при появлении смените `SITE_URL`, добавьте домен в настройки
+Steam API key и вебхук в кабинете Skinsback.

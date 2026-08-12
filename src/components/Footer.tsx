@@ -1,0 +1,60 @@
+import Link from "next/link";
+
+export default function Footer() {
+  return (
+    <footer className="mt-20 border-t border-line bg-bg-elevated">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <div className="flex flex-col items-start justify-between gap-8 md:flex-row">
+          <div className="max-w-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-accent to-accent-hot font-display text-base font-bold text-black">
+                B
+              </span>
+              <span className="font-display text-lg font-bold tracking-wide">
+                BGA<span className="text-accent">Skins</span>
+                <span className="text-ink-faint">.cc</span>
+              </span>
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-ink-dim">
+              Маркет скинов CS2: живые цены, моментальная доставка предметов в Steam через
+              трейд-оффер.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-x-16 gap-y-2 text-sm">
+            <div className="flex flex-col gap-2">
+              <span className="mb-1 font-display text-xs font-semibold uppercase tracking-widest text-ink-faint">
+                Разделы
+              </span>
+              <Link href="/market" className="text-ink-dim transition-colors hover:text-accent">
+                Маркет
+              </Link>
+              <Link href="/profile" className="text-ink-dim transition-colors hover:text-accent">
+                Профиль
+              </Link>
+            </div>
+            <div className="flex flex-col gap-2">
+              <span className="mb-1 font-display text-xs font-semibold uppercase tracking-widest text-ink-faint">
+                Поддержка
+              </span>
+              <a
+                href="https://steamcommunity.com/tradeoffer/new/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-ink-dim transition-colors hover:text-accent"
+              >
+                Мой Trade URL
+              </a>
+              <span className="cursor-default text-ink-dim">support@bgaskins.cc</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 flex flex-col gap-2 border-t border-line pt-6 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between">
+          <span>© {new Date().getFullYear()} BGASkins.cc — не аффилирован с Valve Corp.</span>
+          <span>Counter-Strike 2 является товарным знаком Valve Corporation.</span>
+        </div>
+      </div>
+    </footer>
+  );
+}
