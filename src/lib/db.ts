@@ -64,6 +64,7 @@ function open(): Database.Database {
       username TEXT NOT NULL,
       password_hash TEXT NOT NULL,
       totp_secret TEXT,
+      totp_pending_secret TEXT,
       totp_enabled INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
@@ -117,6 +118,13 @@ function open(): Database.Database {
     );
     CREATE INDEX IF NOT EXISTS idx_deposits_user ON deposits(user_steam_id, id DESC);
   `);
+
+  // Migration: add the pending-2FA-secret column to pre-existing admin tables.
+  try {
+    db.prepare("ALTER TABLE admins ADD COLUMN totp_pending_secret TEXT").run();
+  } catch {
+    // column already exists — ignore
+  }
 
   // Seed the admin row from env (password hashed at rest). If ADMIN_PASSWORD
   // changes, the stored hash is refreshed; the TOTP secret is preserved.
@@ -374,6 +382,7 @@ export interface DbAdmin {
   username: string;
   password_hash: string;
   totp_secret: string | null;
+  totp_pending_secret: string | null;
   totp_enabled: number;
   created_at: string;
 }
@@ -384,10 +393,27 @@ export function getAdmin(): DbAdmin | null {
   );
 }
 
-export function setAdminTotp(secret: string | null, enabled: boolean): void {
+/** Stage a candidate 2FA secret WITHOUT touching the live secret/enabled flag. */
+export function setAdminPendingTotp(secret: string): void {
+  getDb().prepare("UPDATE admins SET totp_pending_secret = ? WHERE id = 1").run(secret);
+}
+
+/** Promote the pending secret to live and enable 2FA (after code verification). */
+export function promoteAdminTotp(): void {
   getDb()
-    .prepare("UPDATE admins SET totp_secret = ?, totp_enabled = ? WHERE id = 1")
-    .run(secret, enabled ? 1 : 0);
+    .prepare(
+      "UPDATE admins SET totp_secret = totp_pending_secret, totp_pending_secret = NULL, totp_enabled = 1 WHERE id = 1 AND totp_pending_secret IS NOT NULL",
+    )
+    .run();
+}
+
+/** Disable 2FA and clear all secrets. */
+export function disableAdminTotp(): void {
+  getDb()
+    .prepare(
+      "UPDATE admins SET totp_secret = NULL, totp_pending_secret = NULL, totp_enabled = 0 WHERE id = 1",
+    )
+    .run();
 }
 
 // ---- Events / audit ----------------------------------------------------------
@@ -404,6 +430,8 @@ interface DbEvent {
   created_at: string;
 }
 
+const EVENT_CAP = 50_000;
+
 export function insertEvent(e: {
   steamId: string | null;
   type: string;
@@ -413,20 +441,25 @@ export function insertEvent(e: {
   path: string | null;
   meta: Record<string, unknown> | null;
 }): void {
-  getDb()
-    .prepare(
-      `INSERT INTO user_events (steam_id, type, ip, country, country_name, path, meta)
+  const db = getDb();
+  db.prepare(
+    `INSERT INTO user_events (steam_id, type, ip, country, country_name, path, meta)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .run(
-      e.steamId,
-      e.type,
-      e.ip,
-      e.country,
-      e.countryName,
-      e.path,
-      e.meta ? JSON.stringify(e.meta) : null,
-    );
+  ).run(
+    e.steamId,
+    e.type,
+    e.ip,
+    e.country,
+    e.countryName,
+    e.path,
+    e.meta ? JSON.stringify(e.meta) : null,
+  );
+  // Opportunistically cap the audit log so it can't grow unbounded.
+  if (Math.random() < 0.02) {
+    db.prepare(
+      "DELETE FROM user_events WHERE id <= (SELECT MAX(id) FROM user_events) - ?",
+    ).run(EVENT_CAP);
+  }
 }
 
 function rowToEvent(r: DbEvent) {

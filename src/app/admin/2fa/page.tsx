@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireAdminPage } from "@/lib/admin-guard";
+import { requireAdminSessionPage } from "@/lib/admin-guard";
 import TwoFactorSetup from "@/components/admin/TwoFactorSetup";
 
 export const metadata: Metadata = {
@@ -8,6 +8,8 @@ export const metadata: Metadata = {
 };
 
 export default async function TwoFactorPage() {
-  await requireAdminPage();
+  // A valid session is enough (an admin forced to enrol must be able to reach
+  // this page even before 2FA is satisfied).
+  await requireAdminSessionPage();
   return <TwoFactorSetup />;
 }

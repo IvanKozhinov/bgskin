@@ -1,16 +1,16 @@
-import { isAdminAuthed } from "@/lib/admin";
-import { getAdmin, setAdminTotp } from "@/lib/db";
+import { createAdminSession, getAdminSession, hasAdminSession } from "@/lib/admin";
+import { getAdmin, promoteAdminTotp } from "@/lib/db";
 import { verifyTotp } from "@/lib/totp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request): Promise<Response> {
-  if (!(await isAdminAuthed())) {
+  if (!(await hasAdminSession())) {
     return Response.json({ ok: false, error: "Доступ запрещён" }, { status: 403 });
   }
   const admin = getAdmin();
-  if (!admin?.totp_secret) {
+  if (!admin?.totp_pending_secret) {
     return Response.json({ ok: false, error: "Сначала сгенерируйте секрет" }, { status: 400 });
   }
 
@@ -22,8 +22,12 @@ export async function POST(request: Request): Promise<Response> {
     token = undefined;
   }
 
-  if (typeof token === "string" && verifyTotp(token, admin.totp_secret)) {
-    setAdminTotp(admin.totp_secret, true);
+  if (typeof token === "string" && verifyTotp(token, admin.totp_pending_secret)) {
+    promoteAdminTotp();
+    // The admin just proved the second factor — mark this session mfa-satisfied
+    // so they aren't immediately bounced to re-login.
+    const s = await getAdminSession();
+    if (s) await createAdminSession(s.username, true);
     return Response.json({ ok: true });
   }
 

@@ -1,5 +1,5 @@
 import { isAdminAuthed } from "@/lib/admin";
-import { getAdmin, setAdminTotp } from "@/lib/db";
+import { disableAdminTotp, getAdmin } from "@/lib/db";
 import { verifyTotp } from "@/lib/totp";
 
 export const runtime = "nodejs";
@@ -26,6 +26,6 @@ export async function POST(request: Request): Promise<Response> {
     }
   }
 
-  setAdminTotp(null, false);
+  disableAdminTotp();
   return Response.json({ ok: true });
 }

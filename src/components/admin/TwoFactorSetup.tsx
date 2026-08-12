@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 interface SetupData {
@@ -19,6 +20,7 @@ export default function TwoFactorSetup() {
   const [notice, setNotice] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const tokenRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   useEffect(() => {
     let cancelled = false;
@@ -50,7 +52,7 @@ export default function TwoFactorSetup() {
     resetForms();
     setNotice(null);
     try {
-      const res = await fetch("/api/admin/2fa/setup");
+      const res = await fetch("/api/admin/2fa/setup", { method: "POST" });
       const data = (await res.json().catch(() => ({}))) as SetupData & ApiResult;
       if (!res.ok || !data.qr || !data.secret) {
         setError(data.error ?? "Не удалось сгенерировать секрет.");
@@ -85,6 +87,9 @@ export default function TwoFactorSetup() {
       setSetup(null);
       setToken("");
       setNotice("Двухфакторная аутентификация включена.");
+      // The server re-minted the session as mfa-satisfied; refresh so guards
+      // (and any enforced-2FA enrolment redirect) re-evaluate.
+      router.refresh();
     } catch {
       setError("Не удалось связаться с сервером. Попробуйте ещё раз.");
     } finally {

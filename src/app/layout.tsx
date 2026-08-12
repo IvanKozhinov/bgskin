@@ -5,6 +5,7 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import FeedTicker from "@/components/FeedTicker";
 import Track from "@/components/Track";
+import AdminHidden from "@/components/AdminHidden";
 
 const chakra = Chakra_Petch({
   variable: "--font-chakra",
@@ -46,7 +47,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <Header />
         <FeedTicker />
         <main className="flex-1">{children}</main>
-        <Footer />
+        <AdminHidden>
+          <Footer />
+        </AdminHidden>
       </body>
     </html>
   );

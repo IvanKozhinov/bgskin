@@ -67,6 +67,7 @@ async function stripeCheckout(depositId: number, amountCents: number): Promise<s
   if (!key) return null;
   const body = new URLSearchParams();
   body.set("mode", "payment");
+  body.set("payment_method_types[0]", "card"); // card-only: no delayed-settlement methods
   body.set("success_url", `${siteUrl()}/wallet?deposit=${depositId}&status=success`);
   body.set("cancel_url", `${siteUrl()}/wallet?deposit=${depositId}&status=cancel`);
   body.set("client_reference_id", String(depositId));
@@ -136,30 +137,64 @@ export async function createDepositIntent(opts: {
   return { ok: true, deposit, awaitingProvider: true };
 }
 
+const WEBHOOK_TOLERANCE_S = 5 * 60; // reject signatures older than 5 minutes (replay window)
+
 /**
- * Verify a Stripe webhook signature and return the paid deposit id, or null.
- * Requires STRIPE_WEBHOOK_SECRET.
+ * Verify a Stripe webhook signature and return the deposit id to credit, or
+ * null. Requires STRIPE_WEBHOOK_SECRET. Credits ONLY when the session is
+ * actually paid — a `checkout.session.completed` with payment_status other than
+ * "paid"/"no_payment_required" (e.g. async methods) is ignored; late settlement
+ * arrives as `checkout.session.async_payment_succeeded`.
  */
 export function verifyStripeWebhook(rawBody: string, sigHeader: string | null): number | null {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret || !sigHeader) return null;
-  const parts = Object.fromEntries(
-    sigHeader.split(",").map((kv) => kv.split("=").map((s) => s.trim()) as [string, string]),
-  );
-  const t = parts["t"];
-  const v1 = parts["v1"];
-  if (!t || !v1) return null;
+
+  // Parse "t=..,v1=..,v1=.." — there may be multiple v1 signatures during key rotation.
+  let t = "";
+  const v1s: string[] = [];
+  for (const part of sigHeader.split(",")) {
+    const idx = part.indexOf("=");
+    if (idx < 0) continue;
+    const k = part.slice(0, idx).trim();
+    const v = part.slice(idx + 1).trim();
+    if (k === "t") t = v;
+    else if (k === "v1") v1s.push(v);
+  }
+  if (!t || v1s.length === 0) return null;
+
+  const ts = Number(t);
+  if (!Number.isFinite(ts) || Math.abs(Date.now() / 1000 - ts) > WEBHOOK_TOLERANCE_S) return null;
+
   const expected = createHmac("sha256", secret).update(`${t}.${rawBody}`).digest("hex");
-  const a = Buffer.from(expected);
-  const b = Buffer.from(v1);
-  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  const eb = Buffer.from(expected);
+  const matched = v1s.some((v1) => {
+    const b = Buffer.from(v1);
+    return eb.length === b.length && timingSafeEqual(eb, b);
+  });
+  if (!matched) return null;
+
   try {
     const evt = JSON.parse(rawBody) as {
       type?: string;
-      data?: { object?: { client_reference_id?: string; metadata?: { deposit_id?: string } } };
+      data?: {
+        object?: {
+          client_reference_id?: string;
+          payment_status?: string;
+          metadata?: { deposit_id?: string };
+        };
+      };
     };
-    if (evt.type !== "checkout.session.completed") return null;
+    const paidEvents = new Set([
+      "checkout.session.completed",
+      "checkout.session.async_payment_succeeded",
+    ]);
+    if (!evt.type || !paidEvents.has(evt.type)) return null;
     const obj = evt.data?.object;
+    // Only credit a session that is actually paid.
+    if (obj?.payment_status !== "paid" && obj?.payment_status !== "no_payment_required") {
+      return null;
+    }
     const depId = obj?.client_reference_id ?? obj?.metadata?.deposit_id;
     return depId ? Number(depId) : null;
   } catch {

@@ -8,6 +8,7 @@ type Step = "creds" | "totp";
 interface LoginResult {
   ok?: boolean;
   totpRequired?: boolean;
+  mustEnroll?: boolean;
   error?: string;
 }
 
@@ -46,6 +47,10 @@ export default function AdminLogin() {
         setStep("totp");
         setToken("");
         setTimeout(() => totpRef.current?.focus(), 50);
+      } else if (data.mustEnroll) {
+        // Deployment mandates 2FA but this admin hasn't enrolled yet.
+        router.push("/admin/2fa");
+        router.refresh();
       } else {
         goToAdmin();
       }
