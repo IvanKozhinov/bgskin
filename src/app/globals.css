@@ -63,12 +63,16 @@ body {
   overflow-x: hidden;
 }
 
-/* Subtle tactical grid backdrop */
+/* Subtle tactical grid backdrop.
+   IMPORTANT: keep this on a dedicated background LAYER, never on a container
+   that also holds content — mask-image clips the whole element (children too),
+   which would fade out anything lower in the box (e.g. hero CTA buttons). */
 .bg-grid {
   background-image:
     linear-gradient(rgba(140, 152, 180, 0.045) 1px, transparent 1px),
     linear-gradient(90deg, rgba(140, 152, 180, 0.045) 1px, transparent 1px);
   background-size: 44px 44px;
+  -webkit-mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 40%, transparent 100%);
   mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 40%, transparent 100%);
 }
 

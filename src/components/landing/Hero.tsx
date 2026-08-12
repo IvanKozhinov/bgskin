@@ -134,10 +134,14 @@ export default function Hero() {
 
   return (
     <section
-      className="bg-grid relative overflow-hidden"
+      className="relative overflow-hidden"
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
     >
+      {/* Grid pattern on its own layer — the mask on .bg-grid clips only this
+          div, never the content above it (buttons/showcase). */}
+      <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden />
+
       {/* Ambient blobs */}
       <div className="blob -top-24 left-[8%] h-80 w-80 bg-accent/35" />
       <div className="blob right-[4%] top-24 h-96 w-96 bg-violet/35" />
