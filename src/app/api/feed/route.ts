@@ -8,7 +8,11 @@ import type { FeedEvent } from "@/lib/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const HEARTBEAT_MS = 25_000;
+const HEARTBEAT_MS = 15_000;
+// Tell the browser how fast to reconnect. Without this the UA default applies
+// (3 s Chromium / 5 s Gecko), which the client's offline grace must otherwise
+// guess at — a mismatch makes every routine reconnect look like an outage.
+const RETRY_MS = 1_000;
 
 export async function GET(request: Request) {
   // Make sure the generator is running and the buffer is seeded before we
@@ -55,7 +59,9 @@ export async function GET(request: Request) {
 
       request.signal.addEventListener("abort", cleanup);
 
-      // Backlog first, then live events (all synchronous here, so no gap/dup).
+      // Reconnect interval first, then the backlog, then live events
+      // (all synchronous here, so no gap/dup).
+      send(`retry: ${RETRY_MS}\n\n`);
       send(`event: backlog\ndata: ${JSON.stringify(getRecentEvents(20))}\n\n`);
 
       if (request.signal.aborted) cleanup();

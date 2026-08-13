@@ -17,8 +17,8 @@ import { onImgError } from "@/lib/img";
 import { useFeed } from "./useFeed";
 
 const ROWS = 8;
-const ROW_H = 72; // px — image 48 + py-3 (24)
-const LIST_H = ROWS * ROW_H + (ROWS - 1); // + 1px dividers
+const ROW_H = 72; // px — image 48 + py-3 (24); border-box, dividers included
+const LIST_H = ROWS * ROW_H;
 
 function relativeTime(ts: number, now: number): string {
   const diffMin = Math.floor(Math.max(0, now - ts) / 60_000);
@@ -74,7 +74,10 @@ export default function LiveFeedPanel() {
                     layout
                     initial={{ opacity: 0, y: -ROW_H }}
                     animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
+                    // popLayout pins the leaving row where it was, which is
+                    // exactly where the next row slides in — fade it out fast so
+                    // the two never ghost over each other.
+                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
                     transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                     style={{ height: ROW_H }}
                   >

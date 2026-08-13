@@ -58,7 +58,18 @@ export function getFeedConfig(): FeedConfig {
 }
 
 export function setFeedConfig(patch: Partial<FeedConfig>): FeedConfig {
-  const merged = { ...getFeedConfig(), ...patch };
+  const merged: Partial<FeedConfig> = { ...getFeedConfig(), ...patch };
+  // Don't persist a copy of the default pool on every save — store the nick
+  // list only when the admin actually customised it, so the shipped default
+  // (src/lib/nicks.ts) stays the source of truth and the row stays small.
+  const nicks = merged.nicks;
+  if (
+    Array.isArray(nicks) &&
+    nicks.length === DEFAULT_FEED_CONFIG.nicks.length &&
+    nicks.every((n, i) => n === DEFAULT_FEED_CONFIG.nicks[i])
+  ) {
+    delete merged.nicks;
+  }
   // Re-validate through getFeedConfig's clamping by round-tripping.
   setFeedConfigJson(JSON.stringify(merged));
   return getFeedConfig();
