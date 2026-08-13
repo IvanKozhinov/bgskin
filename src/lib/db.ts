@@ -106,6 +106,12 @@ function open(): Database.Database {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS pricing_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      config TEXT NOT NULL DEFAULT '{}',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS deposits (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_steam_id TEXT NOT NULL REFERENCES users(steam_id),
@@ -149,6 +155,10 @@ function open(): Database.Database {
 
   db.prepare(
     "INSERT INTO feed_config (id, config) VALUES (1, '{}') ON CONFLICT(id) DO NOTHING",
+  ).run();
+
+  db.prepare(
+    "INSERT INTO pricing_config (id, config) VALUES (1, '{}') ON CONFLICT(id) DO NOTHING",
   ).run();
 
   return db;
@@ -342,7 +352,11 @@ export function failAndRefundOnce(customId: string): boolean {
       )
       .get(cid) as { u: string; p: number; s: OrderStatus } | undefined;
     if (!row) return false;
-    if (row.s !== "pending" && row.s !== "processing") return false;
+    // Refundable from any unfinished state. "sent" (trade offer waiting) very
+    // much included: a user who never accepts ends in timeout/canceled, and
+    // that must return the money. Only a delivered item or an already-refunded
+    // order is final.
+    if (row.s === "delivered" || row.s === "failed") return false;
     db.prepare(
       "UPDATE orders SET status = 'failed', updated_at = datetime('now') WHERE custom_id = ?",
     ).run(cid);
@@ -353,6 +367,32 @@ export function failAndRefundOnce(customId: string): boolean {
     return true;
   });
   return tx(customId);
+}
+
+/**
+ * Orders still in flight and untouched for a while — the reconciler polls these
+ * against Skinsback in case a webhook never arrived.
+ */
+export function listStaleOpenOrders(
+  olderThanSeconds: number,
+  limit = 50,
+): { customId: string; status: OrderStatus; ageSeconds: number }[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT custom_id AS customId, status,
+              CAST((julianday('now') - julianday(updated_at)) * 86400 AS INTEGER) AS ageSeconds
+         FROM orders
+        WHERE status IN ('pending','processing','sent')
+          AND updated_at <= datetime('now', ?)
+        ORDER BY updated_at ASC
+        LIMIT ?`,
+    )
+    .all(`-${Math.max(1, Math.round(olderThanSeconds))} seconds`, limit) as {
+    customId: string;
+    status: OrderStatus;
+    ageSeconds: number;
+  }[];
+  return rows;
 }
 
 export function setOrderSkinsbackId(orderId: number, skinsbackOrderId: string): void {
@@ -589,6 +629,23 @@ export function setFeedConfigJson(json: string): void {
   getDb()
     .prepare(
       "INSERT INTO feed_config (id, config, updated_at) VALUES (1, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET config = excluded.config, updated_at = datetime('now')",
+    )
+    .run(json);
+}
+
+// ---- Pricing config ----------------------------------------------------------
+
+export function getPricingConfigJson(): string {
+  const r = getDb().prepare("SELECT config FROM pricing_config WHERE id = 1").get() as
+    | { config: string }
+    | undefined;
+  return r?.config ?? "{}";
+}
+
+export function setPricingConfigJson(json: string): void {
+  getDb()
+    .prepare(
+      "INSERT INTO pricing_config (id, config, updated_at) VALUES (1, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET config = excluded.config, updated_at = datetime('now')",
     )
     .run(json);
 }

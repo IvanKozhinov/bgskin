@@ -8,9 +8,17 @@ import { sbPricelist } from "./skinsback";
 const TTL_MS = 10 * 60 * 1000;
 const ERROR_RETRY_MS = 60 * 1000;
 
+/** What Skinsback charges us for one market name, plus how many they hold. */
+export interface SbOffer {
+  costCents: number;
+  count: number;
+}
+
 interface PriceCacheState {
-  /** market name → price in integer cents USD */
+  /** market name → Skinsback cost in integer cents USD (what WE pay) */
   map: Map<string, number> | null;
+  /** market name → cost + stock, same freshness as `map` */
+  offers: Map<string, SbOffer> | null;
   fetchedAt: number;
   lastErrorAt: number;
   inflight: Promise<void> | null;
@@ -20,7 +28,13 @@ const globalForPrices = globalThis as unknown as { __bgaPrices?: PriceCacheState
 
 function state(): PriceCacheState {
   if (!globalForPrices.__bgaPrices) {
-    globalForPrices.__bgaPrices = { map: null, fetchedAt: 0, lastErrorAt: 0, inflight: null };
+    globalForPrices.__bgaPrices = {
+      map: null,
+      offers: null,
+      fetchedAt: 0,
+      lastErrorAt: 0,
+      inflight: null,
+    };
   }
   return globalForPrices.__bgaPrices;
 }
@@ -29,11 +43,23 @@ async function refresh(s: PriceCacheState): Promise<void> {
   try {
     const { items } = await sbPricelist();
     const map = new Map<string, number>();
+    const offers = new Map<string, SbOffer>();
     for (const item of items) {
       if (!item.name || !Number.isFinite(item.price)) continue;
-      map.set(item.name, Math.round(item.price * 100));
+      const costCents = Math.round(item.price * 100);
+      // The grouped pricelist returns one row per name; keep the cheapest if a
+      // name ever repeats, and treat a missing count as "at least one".
+      const prev = offers.get(item.name);
+      const count = Number.isFinite(item.count) && item.count > 0 ? Math.round(item.count) : 1;
+      if (!prev || costCents < prev.costCents) {
+        map.set(item.name, costCents);
+        offers.set(item.name, { costCents, count });
+      } else {
+        offers.set(item.name, { costCents: prev.costCents, count: prev.count + count });
+      }
     }
     s.map = map;
+    s.offers = offers;
     s.fetchedAt = Date.now();
   } catch (err) {
     // Keep whatever we had; retry after a short backoff.
@@ -49,6 +75,20 @@ async function refresh(s: PriceCacheState): Promise<void> {
  * single background refresh runs. Never throws.
  */
 export async function getLivePriceMapCents(): Promise<Map<string, number> | null> {
+  return (await ensureOffers())?.map ?? null;
+}
+
+/** Same freshness as {@link getLivePriceMapCents}, with stock counts. */
+export async function getLiveOffers(): Promise<Map<string, SbOffer> | null> {
+  return (await ensureOffers())?.offers ?? null;
+}
+
+/** Epoch ms of the last successful pricelist fetch (0 = never). */
+export function pricesFetchedAt(): number {
+  return state().fetchedAt;
+}
+
+async function ensureOffers(): Promise<PriceCacheState | null> {
   if (!isSkinsbackLive()) return null;
   const s = state();
   const now = Date.now();
@@ -65,5 +105,5 @@ export async function getLivePriceMapCents(): Promise<Map<string, number> | null
     if (s.map === null) await s.inflight;
   }
 
-  return s.map;
+  return s;
 }

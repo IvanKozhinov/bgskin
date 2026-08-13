@@ -16,6 +16,7 @@ import {
   tryDebit,
 } from "@/lib/db";
 import { getSessionSteamId } from "@/lib/session";
+import { getPricingConfig, maxAcceptableCostCents, retailCents } from "@/lib/pricing";
 import { logEvent } from "@/lib/events";
 import {
   parseTradeUrl,
@@ -153,6 +154,12 @@ async function liveBuy(
   item: CatalogItem,
   trade: { partner: string; token: string },
 ): Promise<Response> {
+  // Cost basis: what Skinsback may charge us. Derived from the CURRENT cost of
+  // this item, never from the buyer price — the markup must not be spent as
+  // slippage. Falls back to the buyer price only if the cost is unknown.
+  const cfg = getPricingConfig();
+  const costBasisCents = item.costCents && item.costCents > 0 ? item.costCents : item.priceCents;
+
   // Find a purchasable offer BEFORE debiting.
   let cheapestId: string;
   let cheapestPriceUsd: number;
@@ -176,14 +183,17 @@ async function liveBuy(
     return json({ ok: false, error: "Магазин временно недоступен, попробуйте позже" }, 502);
   }
 
-  const maxPriceUsd = (item.priceCents / 100) * 1.07; // 7% slippage cap
-  if (cheapestPriceUsd > maxPriceUsd) {
+  const maxCostCents = maxAcceptableCostCents(costBasisCents, cfg);
+  const maxPriceUsd = maxCostCents / 100;
+  if (Math.round(cheapestPriceUsd * 100) > maxCostCents) {
+    // Cost moved beyond the allowed slippage — quote the buyer the new price
+    // (cost + markup), not the raw cost.
     return json(
       {
         ok: false,
         error: "Цена изменилась. Обновите страницу и подтвердите покупку заново.",
         priceChanged: true,
-        currentPriceCents: Math.round(cheapestPriceUsd * 100),
+        currentPriceCents: retailCents(Math.round(cheapestPriceUsd * 100), cfg),
       },
       409,
     );

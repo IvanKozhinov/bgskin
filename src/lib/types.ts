@@ -42,7 +42,9 @@ export interface CatalogItem {
   stattrak: boolean; // stattrak variant exists
   souvenir: boolean;
   collection?: string;
-  priceCents: number; // current price, integer cents USD
+  priceCents: number; // price shown to the buyer (Skinsback cost + markup), cents USD
+  costCents?: number; // what Skinsback charges us, cents USD — never shown to buyers
+  stock?: number; // units Skinsback currently has for this name
   popularity: number; // 0..100 synthetic, for "hot" sorting
   available?: boolean; // false in live mode when no Skinsback price exists (not buyable). undefined == true.
 }
@@ -202,6 +204,21 @@ export interface FeedConfig {
   minPriceCents: number; // only surface items at/above this price
   maxPriceCents: number; // 0 = no cap
   nicks: string[]; // buyer nickname pool
+}
+
+/**
+ * How the shop price is derived from the Skinsback cost.
+ * Buyer price = cost * (1 + percent/100), raised to at least `minMarkupCents`
+ * above cost, then rounded. `tiers` override `percent` for costs at or below
+ * their `uptoCents` threshold (first match wins, ascending) — cheap skins
+ * usually need a bigger margin than expensive ones.
+ */
+export interface PricingConfig {
+  markupPercent: number; // default margin over Skinsback cost
+  tiers: { uptoCents: number; percent: number }[];
+  minMarkupCents: number; // floor on absolute margin per item
+  roundToCents: number; // 1 = exact cents, 10 = round up to $0.10, 100 = to $1
+  maxSlippagePercent: number; // how far above cost we still accept at buy time
 }
 
 export interface BuyResponse {

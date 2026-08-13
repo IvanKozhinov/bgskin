@@ -11,7 +11,8 @@ import type {
   RarityId,
 } from "@/lib/types";
 import { RARITY_META } from "@/lib/types";
-import { getLivePriceMapCents } from "@/lib/prices";
+import { getLiveOffers, type SbOffer } from "@/lib/prices";
+import { getPricingConfig, retailCents } from "@/lib/pricing";
 import { isSkinsbackLive } from "@/lib/config";
 
 const MERGE_TTL_MS = 5 * 60 * 1000;
@@ -38,7 +39,8 @@ interface SearchEntry {
 
 interface CatalogStore {
   base: CatalogItem[]; // as loaded from disk (priceCents = 0)
-  search: SearchEntry[]; // parallel to base
+  baseSearch: SearchEntry[]; // parallel to base
+  search: SearchEntry[]; // parallel to `priced` (base entries + Skinsback-only ones)
   weaponFacet: CatalogFacets["weapons"]; // static, over full catalog
   rarityFacet: CatalogFacets["rarities"]; // static, over full catalog
   priced: CatalogItem[]; // parallel to base, current prices
@@ -64,6 +66,11 @@ function stripForSearch(s: string): string {
   return s.replace(/[|\-]/g, "").replace(/\s+/g, " ").trim();
 }
 
+function searchEntry(it: CatalogItem): SearchEntry {
+  const hay = `${it.name} ${it.weapon}`.toLowerCase();
+  return { hay, hayStripped: stripForSearch(hay) };
+}
+
 function loadBaseItems(): CatalogItem[] {
   const dataDir = path.join(process.cwd(), "data");
   for (const file of ["catalog.json", "catalog.seed.json"]) {
@@ -86,10 +93,7 @@ function loadBaseItems(): CatalogItem[] {
 function buildStore(): CatalogStore {
   const base = loadBaseItems();
 
-  const search: SearchEntry[] = base.map((it) => {
-    const hay = `${it.name} ${it.weapon}`.toLowerCase();
-    return { hay, hayStripped: stripForSearch(hay) };
-  });
+  const search: SearchEntry[] = base.map(searchEntry);
 
   const weaponCounts = new Map<string, number>();
   const rarityCounts = new Map<RarityId, number>();
@@ -118,6 +122,7 @@ function buildStore(): CatalogStore {
 
   return {
     base,
+    baseSearch: search,
     search,
     weaponFacet,
     rarityFacet,
@@ -157,15 +162,23 @@ function demoPriceCents(item: CatalogItem): number {
  * name it could match under the rule "key === name || key starts with
  * name + ' ('"; StatTrak / Souvenir listings are ignored.
  */
-function buildBasePriceMap(live: Map<string, number>): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const [key, price] of live) {
-    if (!Number.isFinite(price) || price <= 0) continue;
+function buildBasePriceMap(live: Map<string, SbOffer>): Map<string, SbOffer> {
+  const out = new Map<string, SbOffer>();
+  for (const [key, offer] of live) {
+    const cents = Math.round(offer.costCents);
+    if (!Number.isFinite(cents) || cents <= 0) continue;
     if (key.includes("StatTrak") || key.includes("Souvenir")) continue;
-    const cents = Math.round(price);
     const put = (name: string) => {
       const prev = out.get(name);
-      if (prev === undefined || cents < prev) out.set(name, cents);
+      if (!prev) {
+        out.set(name, { costCents: cents, count: offer.count });
+        return;
+      }
+      // Cheapest variant sets the price; stock adds up across wears.
+      out.set(name, {
+        costCents: Math.min(prev.costCents, cents),
+        count: prev.count + offer.count,
+      });
     };
     put(key);
     for (let i = key.indexOf(" ("); i !== -1; i = key.indexOf(" (", i + 1)) {
@@ -173,6 +186,49 @@ function buildBasePriceMap(live: Map<string, number>): Map<string, number> {
     }
   }
   return out;
+}
+
+const WEAR_SUFFIX =
+  /\s\((Factory New|Minimal Wear|Field-Tested|Well-Worn|Battle-Scarred)\)$/;
+
+/** Guess a category from a Skinsback market name we have no metadata for. */
+function guessCategory(name: string, weapon: string): CatalogItem["category"] {
+  const n = name.toLowerCase();
+  if (n.startsWith("★") && n.includes("gloves")) return "gloves";
+  if (n.startsWith("★") || /knife|bayonet|karambit|daggers/.test(n)) return "knife";
+  const w = weapon.toLowerCase();
+  if (/^(glock|usp|p2000|p250|five-seven|tec-9|cz75|dual berettas|desert eagle|r8)/.test(w))
+    return "pistol";
+  if (/^(ak-47|m4a4|m4a1|aug|sg 553|famas|galil|ssg 08|awp|scar-20|g3sg1)/.test(w)) return "rifle";
+  if (/^(mac-10|mp9|mp7|mp5|ump-45|p90|pp-bizon)/.test(w)) return "smg";
+  if (/^(nova|xm1014|mag-7|sawed-off|m249|negev)/.test(w)) return "heavy";
+  return "other";
+}
+
+/**
+ * Build a storefront item for a Skinsback offer we have no local metadata for
+ * (cases, stickers, agents, patches, music kits …). No image is available, so
+ * the card falls back to the neutral placeholder.
+ */
+function itemFromOfferName(name: string, offer: SbOffer, priceCents: number): CatalogItem {
+  const weapon = name.includes(" | ") ? name.split(" | ")[0].replace(/^★\s*/, "").trim() : "";
+  return {
+    id: `sb-${fnv1a(name).toString(36)}`,
+    name,
+    weapon: weapon || "Прочее",
+    category: guessCategory(name, weapon),
+    rarity: "milspec",
+    image: "",
+    minFloat: 0,
+    maxFloat: 1,
+    stattrak: false,
+    souvenir: false,
+    priceCents,
+    costCents: offer.costCents,
+    stock: offer.count,
+    popularity: 0,
+    available: true,
+  };
 }
 
 function priceBounds(items: CatalogItem[]): { min: number; max: number } {
@@ -190,9 +246,9 @@ function priceBounds(items: CatalogItem[]): { min: number; max: number } {
 
 async function recomputePrices(store: CatalogStore): Promise<void> {
   const live = isSkinsbackLive();
-  let liveMap: Map<string, number> | null = null;
+  let liveMap: Map<string, SbOffer> | null = null;
   try {
-    liveMap = await getLivePriceMapCents();
+    liveMap = await getLiveOffers();
   } catch {
     liveMap = null;
   }
@@ -206,18 +262,51 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
   }
 
   const baseMap = liveMap ? buildBasePriceMap(liveMap) : null;
+  const cfg = getPricingConfig();
 
-  const priced = store.base.map((it) => {
+  const priced: CatalogItem[] = store.base.map((it) => {
     if (baseMap) {
-      // Live mode: only items present in the Skinsback price list are buyable.
-      const p = baseMap.get(it.name);
-      return { ...it, priceCents: p ?? 0, available: p !== undefined };
+      // Live mode: stock comes from Skinsback, the shown price adds our markup.
+      const offer = baseMap.get(it.name);
+      return {
+        ...it,
+        priceCents: offer ? retailCents(offer.costCents, cfg) : 0,
+        costCents: offer?.costCents,
+        stock: offer?.count,
+        available: offer !== undefined,
+      };
     }
-    // Demo mode: deterministic demo price, everything buyable.
-    return { ...it, priceCents: demoPriceCents(it), available: true };
+    // Demo mode: deterministic demo cost, marked up the same way so the
+    // storefront shows exactly the arithmetic live mode will use.
+    const cost = demoPriceCents(it);
+    return {
+      ...it,
+      priceCents: retailCents(cost, cfg),
+      costCents: cost,
+      stock: undefined,
+      available: true,
+    };
   });
 
+  // Everything Skinsback stocks that our metadata does not cover (cases,
+  // stickers, agents …) still belongs in the storefront.
+  if (baseMap) {
+    const known = new Set(store.base.map((it) => it.name));
+    for (const [name, offer] of baseMap) {
+      if (known.has(name) || WEAR_SUFFIX.test(name)) continue;
+      const price = retailCents(offer.costCents, cfg);
+      if (price <= 0) continue;
+      priced.push(itemFromOfferName(name, offer, price));
+    }
+  }
+
   store.priced = priced;
+  // Keep the search index aligned with `priced`: base entries are reused, the
+  // Skinsback-only tail gets fresh entries.
+  store.search =
+    priced.length === store.baseSearch.length
+      ? store.baseSearch
+      : [...store.baseSearch, ...priced.slice(store.baseSearch.length).map(searchEntry)];
   store.pricedById = new Map(priced.map((it) => [it.id, it]));
   store.facets = {
     weapons: store.weaponFacet,

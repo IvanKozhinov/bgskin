@@ -180,17 +180,26 @@ export async function sbBuyById(opts: {
   };
 }
 
-/** Fetch current status of a purchase by our custom id. */
+/**
+ * Fetch current status of a purchase by our custom id.
+ * Skinsback answers either as a flat object (single purchase) or under
+ * `items`/`orders` (batch lookups), so both shapes are accepted.
+ */
 export async function sbOrderInfo(customId: string): Promise<{ offerStatus: string; buyId: string }> {
   const json = await sbCall("market_getinfo", { custom_ids: [customId] });
-  const rawItems = Array.isArray(json.items) ? json.items : [];
-  const first = asRecord(rawItems[0]);
-  if (!first) {
+
+  const list = Array.isArray(json.items)
+    ? json.items
+    : Array.isArray(json.orders)
+      ? json.orders
+      : [];
+  const record = asRecord(list[0]) ?? (json.offer_status !== undefined ? json : null);
+  if (!record) {
     throw new Error(`Skinsback: no order info for custom_id ${customId}`);
   }
   return {
-    offerStatus: toStr(first.offer_status ?? first.status),
-    buyId: toStr(first.buy_id ?? first.id),
+    offerStatus: toStr(record.offer_status ?? record.status),
+    buyId: toStr(record.buy_id ?? record.id),
   };
 }
 
