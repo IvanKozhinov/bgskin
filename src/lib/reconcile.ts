@@ -7,12 +7,20 @@
 // has been stuck past HARD_TIMEOUT_S with no answer from the provider.
 
 import { isSkinsbackLive } from "./config";
-import { advanceOrderStatus, failAndRefundOnce, listStaleOpenOrders } from "./db";
+import {
+  advanceOrderStatus,
+  failAndRefundOnce,
+  listStaleOpenOrders,
+  refundRolledBackOrder,
+} from "./db";
 import { sbOrderInfo, SkinsbackApiError } from "./skinsback";
 import type { OrderStatus } from "./types";
 
 const STALE_AFTER_S = 90; // don't poll an order that just changed
-const HARD_TIMEOUT_S = 45 * 60; // give up and refund after this long
+const HARD_TIMEOUT_S = 45 * 60; // give up and refund after this long (from creation)
+// A purchase Skinsback has no record of is refundable much sooner: the provider
+// answered definitively. Small grace so an in-flight registration isn't killed.
+const NOT_FOUND_GRACE_S = 5 * 60;
 const MAX_PER_RUN = 25;
 const MIN_RUN_INTERVAL_MS = 60_000;
 
@@ -56,7 +64,9 @@ async function run(): Promise<ReconcileResult> {
     try {
       const info = await sbOrderInfo(order.customId);
       const next = mapOfferStatus(info.offerStatus);
-      if (next === "failed") {
+      if (info.offerStatus === "rollback_user" || info.offerStatus === "rollback_supplier") {
+        if (refundRolledBackOrder(order.customId)) result.refunded++;
+      } else if (next === "failed") {
         if (failAndRefundOnce(order.customId)) result.refunded++;
       } else if (next === "delivered") {
         advanceOrderStatus(order.customId, "delivered");
@@ -69,9 +79,15 @@ async function run(): Promise<ReconcileResult> {
         if (failAndRefundOnce(order.customId)) result.refunded++;
       }
     } catch (err) {
-      // A definitive API error means the purchase isn't there at all; after the
-      // hard timeout that is reason enough to refund. Network errors just wait.
-      if (err instanceof SkinsbackApiError && order.ageSeconds > HARD_TIMEOUT_S) {
+      // "purchase_not_found" is a definitive answer: the buy never registered,
+      // so the debit has no counterpart and must go back. Other API errors get
+      // the full hard timeout; network/timeout errors just wait for the next run.
+      const notFound =
+        err instanceof SkinsbackApiError && err.code === "purchase_not_found";
+      const refundable = notFound
+        ? order.ageSeconds > NOT_FOUND_GRACE_S
+        : err instanceof SkinsbackApiError && order.ageSeconds > HARD_TIMEOUT_S;
+      if (refundable) {
         if (failAndRefundOnce(order.customId)) result.refunded++;
       } else {
         result.errors++;

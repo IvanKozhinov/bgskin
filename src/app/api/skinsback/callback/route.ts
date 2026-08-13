@@ -2,7 +2,12 @@
 // Verifies the signature over the raw body, maps offer_status to our
 // OrderStatus and refunds the user (once) when a purchase fails.
 
-import { advanceOrderStatus, failAndRefundOnce, getOrderRowByCustomId } from "@/lib/db";
+import {
+  advanceOrderStatus,
+  failAndRefundOnce,
+  getOrderRowByCustomId,
+  refundRolledBackOrder,
+} from "@/lib/db";
 import { verifyWebhookSignature } from "@/lib/skinsback";
 import type { OrderStatus } from "@/lib/types";
 
@@ -62,7 +67,11 @@ export async function POST(request: Request): Promise<Response> {
       const row = getOrderRowByCustomId(customId);
       if (row) {
         const nextStatus = mapOfferStatus(offerStatus);
-        if (nextStatus === "failed") {
+        if (offerStatus === "rollback_user" || offerStatus === "rollback_supplier") {
+          // Steam Trade Protection pulled the item back — even a "delivered"
+          // order must be refunded, which failAndRefundOnce refuses to do.
+          refundRolledBackOrder(customId);
+        } else if (nextStatus === "failed") {
           // Atomic fail+refund: guaranteed once even if the buy-route error path
           // also races to refund the same order.
           failAndRefundOnce(customId);

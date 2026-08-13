@@ -119,17 +119,20 @@ async function sbCall(method: string, params: SbParams = {}): Promise<Record<str
 /** Full CS2 price list (grouped form). Prices are float USD. */
 export async function sbPricelist(): Promise<{
   last_update: string;
-  items: { name: string; price: number; count: number }[];
+  items: { name: string; price: number; count: number | undefined }[];
 }> {
   const json = await sbCall("market_pricelist", { game: "cs2" });
   const rawItems = Array.isArray(json.items) ? json.items : [];
-  const items: { name: string; price: number; count: number }[] = [];
+  const items: { name: string; price: number; count: number | undefined }[] = [];
   for (const raw of rawItems) {
     const r = asRecord(raw);
     if (!r) continue;
     const name = toStr(r.name);
     if (!name) continue;
-    items.push({ name, price: toNumber(r.price), count: toNumber(r.count) });
+    // Keep "field absent" distinct from "count: 0" — the latter means the
+    // offer is out of stock and must not be listed as buyable.
+    const count = r.count === undefined || r.count === null ? undefined : toNumber(r.count);
+    items.push({ name, price: toNumber(r.price), count });
   }
   return { last_update: toStr(json.last_update), items };
 }
@@ -195,7 +198,13 @@ export async function sbOrderInfo(customId: string): Promise<{ offerStatus: stri
       : [];
   const record = asRecord(list[0]) ?? (json.offer_status !== undefined ? json : null);
   if (!record) {
-    throw new Error(`Skinsback: no order info for custom_id ${customId}`);
+    // A successful response with no matching row is a DEFINITIVE answer: the
+    // purchase never registered. It must not look like a transient network
+    // failure, otherwise the reconciler would keep the buyer's money frozen.
+    throw new SkinsbackApiError(
+      `Skinsback has no purchase for custom_id ${customId}`,
+      "purchase_not_found",
+    );
   }
   return {
     offerStatus: toStr(record.offer_status ?? record.status),

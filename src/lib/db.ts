@@ -329,13 +329,37 @@ const STATUS_RANK: Record<OrderStatus, number> = {
   demo_delivered: 3,
 };
 
-/** Advance an order's status only forward along the ladder. */
+const TERMINAL: ReadonlySet<OrderStatus> = new Set<OrderStatus>([
+  "delivered",
+  "failed",
+  "demo_delivered",
+]);
+
+/**
+ * Advance an order's status only forward along the ladder.
+ *
+ * Terminal states absorb: once an order is delivered or failed+refunded it can
+ * never move again. Without this a late/replayed "accepted" webhook would flip
+ * an already-refunded order to "delivered", leaving the buyer with both the
+ * skin and the money. Such a collision is logged — it needs a human.
+ */
 export function advanceOrderStatus(customId: string, status: OrderStatus): void {
   const db = getDb();
   const row = db.prepare("SELECT status FROM orders WHERE custom_id = ?").get(customId) as
     | { status: OrderStatus }
     | undefined;
   if (!row) return;
+  if (TERMINAL.has(row.status)) {
+    if (row.status !== status) {
+      console.error(
+        `[orders] conflicting terminal update ignored: order ${customId} is "${row.status}", got "${status}".` +
+          (row.status === "failed" && status === "delivered"
+            ? " Item was delivered AFTER a refund — manual clawback required."
+            : ""),
+      );
+    }
+    return;
+  }
   if (STATUS_RANK[status] < STATUS_RANK[row.status]) return;
   db.prepare(
     "UPDATE orders SET status = ?, updated_at = datetime('now') WHERE custom_id = ?",
@@ -377,14 +401,17 @@ export function listStaleOpenOrders(
   olderThanSeconds: number,
   limit = 50,
 ): { customId: string; status: OrderStatus; ageSeconds: number }[] {
+  // ageSeconds counts from CREATION, not from the last update: polling touches
+  // updated_at, so an update-based age would reset on every poll and the hard
+  // timeout could never be reached.
   const rows = getDb()
     .prepare(
       `SELECT custom_id AS customId, status,
-              CAST((julianday('now') - julianday(updated_at)) * 86400 AS INTEGER) AS ageSeconds
+              CAST((julianday('now') - julianday(created_at)) * 86400 AS INTEGER) AS ageSeconds
          FROM orders
         WHERE status IN ('pending','processing','sent')
           AND updated_at <= datetime('now', ?)
-        ORDER BY updated_at ASC
+        ORDER BY created_at ASC
         LIMIT ?`,
     )
     .all(`-${Math.max(1, Math.round(olderThanSeconds))} seconds`, limit) as {
@@ -393,6 +420,36 @@ export function listStaleOpenOrders(
     ageSeconds: number;
   }[];
   return rows;
+}
+
+/**
+ * Refund an order that was already marked delivered because Steam Trade
+ * Protection rolled the trade back (rollback_user / rollback_supplier): the item
+ * went back to the supplier, so the buyer holds nothing and must get the money.
+ * Ordinary failures must keep using {@link failAndRefundOnce}.
+ */
+export function refundRolledBackOrder(customId: string): boolean {
+  const db = getDb();
+  const tx = db.transaction((cid: string): boolean => {
+    const row = db
+      .prepare(
+        "SELECT user_steam_id AS u, price_cents AS p, status AS s FROM orders WHERE custom_id = ?",
+      )
+      .get(cid) as { u: string; p: number; s: OrderStatus } | undefined;
+    if (!row) return false;
+    if (row.s === "failed") return false; // already refunded
+    db.prepare(
+      "UPDATE orders SET status = 'failed', updated_at = datetime('now') WHERE custom_id = ?",
+    ).run(cid);
+    db.prepare("UPDATE users SET balance_cents = balance_cents + ? WHERE steam_id = ?").run(
+      row.p,
+      row.u,
+    );
+    return true;
+  });
+  const done = tx(customId);
+  if (done) console.warn(`[orders] rollback refund issued for order ${customId}`);
+  return done;
 }
 
 export function setOrderSkinsbackId(orderId: number, skinsbackOrderId: string): void {

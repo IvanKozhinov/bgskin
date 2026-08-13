@@ -5,7 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import { isSkinsbackLive } from "@/lib/config";
-import { getItemById } from "@/lib/catalog";
+import { getItemForPurchase } from "@/lib/catalog";
 import {
   advanceOrderStatus,
   createOrder,
@@ -69,7 +69,8 @@ export async function POST(request: Request): Promise<Response> {
       return json({ ok: false, error: "Не указан предмет" }, 400);
     }
 
-    const item = await getItemById(itemId);
+    // Server-side lookup: keeps costCents so we can cap what we pay Skinsback.
+    const item = await getItemForPurchase(itemId);
     if (!item) return json({ ok: false, error: "Предмет не найден" }, 404);
     if (item.available === false || item.priceCents <= 0) {
       return json({ ok: false, error: "Предмет сейчас недоступен для покупки" }, 409);
@@ -166,11 +167,15 @@ async function liveBuy(
   try {
     const results = await sbSearch(item.name);
     const prefix = `${item.name} (`;
+    // Match the variant we are actually selling: a StatTrak listing must buy a
+    // StatTrak offer, and a plain listing must never buy one by accident.
+    const wantStatTrak = item.name.includes("StatTrak");
+    const wantSouvenir = item.name.includes("Souvenir");
     const candidates = results.filter(
       (r) =>
         (r.name === item.name || r.name.startsWith(prefix)) &&
-        !r.name.includes("StatTrak") &&
-        !r.name.includes("Souvenir"),
+        r.name.includes("StatTrak") === wantStatTrak &&
+        r.name.includes("Souvenir") === wantSouvenir,
     );
     if (candidates.length === 0) {
       return json({ ok: false, error: "Предмет сейчас недоступен" }, 409);
@@ -183,7 +188,8 @@ async function liveBuy(
     return json({ ok: false, error: "Магазин временно недоступен, попробуйте позже" }, 502);
   }
 
-  const maxCostCents = maxAcceptableCostCents(costBasisCents, cfg);
+  // Capped by what the buyer paid: a slip we accept must never exceed the sale.
+  const maxCostCents = maxAcceptableCostCents(costBasisCents, cfg, item.priceCents);
   const maxPriceUsd = maxCostCents / 100;
   if (Math.round(cheapestPriceUsd * 100) > maxCostCents) {
     // Cost moved beyond the allowed slippage — quote the buyer the new price
@@ -225,7 +231,21 @@ async function liveBuy(
       customId,
     });
     setOrderSkinsbackId(order.id, bought.buyId);
-    advanceOrderStatus(customId, "processing");
+
+    // market_buy can come back already terminal (bad trade token, user not
+    // tradable, trade_create_error…). Reporting success there would leave the
+    // buyer paying for an offer that will never arrive.
+    if (FAILED_OFFER.has(bought.offerStatus)) {
+      failAndRefundOnce(customId);
+      return json(
+        { ok: false, error: "Не удалось создать трейд-оффер, средства возвращены" },
+        502,
+      );
+    }
+    if (bought.offerStatus === "accepted") advanceOrderStatus(customId, "delivered");
+    else if (bought.offerStatus === "waiting_accept") advanceOrderStatus(customId, "sent");
+    else advanceOrderStatus(customId, "processing");
+
     const freshOrder = getOrderById(order.id) ?? { ...order, status: "processing" as const };
     const newBalanceCents = getUser(steamId)?.balance_cents ?? 0;
     return json({ ok: true, order: freshOrder, newBalanceCents });

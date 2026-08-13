@@ -50,7 +50,12 @@ async function refresh(s: PriceCacheState): Promise<void> {
       // The grouped pricelist returns one row per name; keep the cheapest if a
       // name ever repeats, and treat a missing count as "at least one".
       const prev = offers.get(item.name);
-      const count = Number.isFinite(item.count) && item.count > 0 ? Math.round(item.count) : 1;
+      // Absent count = unknown, assume one is available. An explicit 0 means
+      // out of stock and stays 0 so the catalog can hide it.
+      const count =
+        item.count === undefined || !Number.isFinite(item.count)
+          ? 1
+          : Math.max(0, Math.round(item.count));
       if (!prev || costCents < prev.costCents) {
         map.set(item.name, costCents);
         offers.set(item.name, { costCents, count });

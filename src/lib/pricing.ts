@@ -114,8 +114,18 @@ export function retailCents(costCents: number, cfg: PricingConfig): number {
  * Highest cost we still accept when actually buying from Skinsback. Derived
  * from the COST, never from the buyer price — otherwise the whole markup would
  * be handed back as allowed slippage.
+ *
+ * Hard ceiling: never above what the buyer actually paid. With a generous
+ * slippage setting (say 15%) and a thin margin (10%) the raw allowance would
+ * exceed the sale price and every accepted slip would be a loss.
  */
-export function maxAcceptableCostCents(costCents: number, cfg: PricingConfig): number {
+export function maxAcceptableCostCents(
+  costCents: number,
+  cfg: PricingConfig,
+  buyerPaidCents?: number,
+): number {
   const cost = Math.max(0, Math.round(costCents));
-  return Math.ceil(cost * (1 + cfg.maxSlippagePercent / 100));
+  const allowance = Math.ceil(cost * (1 + cfg.maxSlippagePercent / 100));
+  if (buyerPaidCents === undefined || !Number.isFinite(buyerPaidCents)) return allowance;
+  return Math.min(allowance, Math.max(cost, Math.round(buyerPaidCents)));
 }

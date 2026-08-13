@@ -167,7 +167,6 @@ function buildBasePriceMap(live: Map<string, SbOffer>): Map<string, SbOffer> {
   for (const [key, offer] of live) {
     const cents = Math.round(offer.costCents);
     if (!Number.isFinite(cents) || cents <= 0) continue;
-    if (key.includes("StatTrak") || key.includes("Souvenir")) continue;
     const put = (name: string) => {
       const prev = out.get(name);
       if (!prev) {
@@ -181,9 +180,11 @@ function buildBasePriceMap(live: Map<string, SbOffer>): Map<string, SbOffer> {
       });
     };
     put(key);
-    for (let i = key.indexOf(" ("); i !== -1; i = key.indexOf(" (", i + 1)) {
-      put(key.slice(0, i));
-    }
+    // Collapse ONLY a real wear suffix. Splitting on every " (" invented names
+    // like "Sticker | Foo" out of "Sticker | Foo (Holo)" — listings that don't
+    // exist at Skinsback and therefore can never be bought.
+    const base = key.replace(WEAR_SUFFIX, "");
+    if (base !== key) put(base);
   }
   return out;
 }
@@ -210,23 +211,43 @@ function guessCategory(name: string, weapon: string): CatalogItem["category"] {
  * (cases, stickers, agents, patches, music kits …). No image is available, so
  * the card falls back to the neutral placeholder.
  */
-function itemFromOfferName(name: string, offer: SbOffer, priceCents: number): CatalogItem {
+const VARIANT_PREFIX = /^(StatTrak™?\s*|Souvenir\s+|★\s*StatTrak™?\s*)/;
+
+/**
+ * Metadata donor for a StatTrak/Souvenir listing: "StatTrak™ AK-47 | Redline"
+ * shares artwork and rarity with the plain skin, so the card looks right
+ * instead of falling back to a blank placeholder.
+ */
+function donorName(name: string): string | null {
+  if (!VARIANT_PREFIX.test(name)) return null;
+  const stripped = name.replace(/^★\s*/, "").replace(/^(StatTrak™?\s*|Souvenir\s+)/, "");
+  return name.startsWith("★") ? `★ ${stripped}` : stripped;
+}
+
+function itemFromOfferName(
+  name: string,
+  offer: SbOffer,
+  priceCents: number,
+  donor?: CatalogItem,
+): CatalogItem {
   const weapon = name.includes(" | ") ? name.split(" | ")[0].replace(/^★\s*/, "").trim() : "";
+  const isStatTrak = /StatTrak/.test(name);
   return {
-    id: `sb-${fnv1a(name).toString(36)}`,
+    id: `sb-${fnv1a(name).toString(36)}-${name.length.toString(36)}`,
     name,
-    weapon: weapon || "Прочее",
-    category: guessCategory(name, weapon),
-    rarity: "milspec",
-    image: "",
-    minFloat: 0,
-    maxFloat: 1,
-    stattrak: false,
-    souvenir: false,
+    weapon: donor?.weapon ?? weapon.replace(/^(StatTrak™?|Souvenir)\s*/, "") ?? "Прочее",
+    category: donor?.category ?? guessCategory(name, weapon),
+    rarity: donor?.rarity ?? "milspec",
+    image: donor?.image ?? "",
+    minFloat: donor?.minFloat ?? 0,
+    maxFloat: donor?.maxFloat ?? 1,
+    stattrak: isStatTrak,
+    souvenir: /Souvenir/.test(name),
+    kind: donor?.kind ?? "skin",
     priceCents,
     costCents: offer.costCents,
     stock: offer.count,
-    popularity: 0,
+    popularity: donor ? Math.max(0, donor.popularity - 5) : 0,
     available: true,
   };
 }
@@ -268,12 +289,13 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
     if (baseMap) {
       // Live mode: stock comes from Skinsback, the shown price adds our markup.
       const offer = baseMap.get(it.name);
+      const inStock = offer !== undefined && offer.count > 0;
       return {
         ...it,
         priceCents: offer ? retailCents(offer.costCents, cfg) : 0,
         costCents: offer?.costCents,
         stock: offer?.count,
-        available: offer !== undefined,
+        available: inStock,
       };
     }
     // Demo mode: deterministic demo cost, marked up the same way so the
@@ -292,12 +314,14 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
   // Everything Skinsback stocks that our metadata does not cover (cases,
   // stickers, agents …) still belongs in the storefront.
   if (baseMap) {
-    const known = new Set(store.base.map((it) => it.name));
+    const known = new Map(store.base.map((it) => [it.name, it]));
     for (const [name, offer] of baseMap) {
-      if (known.has(name) || WEAR_SUFFIX.test(name)) continue;
+      if (known.has(name) || WEAR_SUFFIX.test(name) || offer.count <= 0) continue;
       const price = retailCents(offer.costCents, cfg);
       if (price <= 0) continue;
-      priced.push(itemFromOfferName(name, offer, price));
+      // StatTrak/Souvenir listings borrow artwork from the plain skin.
+      const donor = known.get(donorName(name) ?? "");
+      priced.push(itemFromOfferName(name, offer, price, donor));
     }
   }
 
@@ -330,13 +354,34 @@ async function ensureFresh(): Promise<CatalogStore> {
   return store;
 }
 
-export async function getAllItems(): Promise<CatalogItem[]> {
-  const store = await ensureFresh();
-  // Only buyable items — consumers are the fake feed and "hot items" showcase.
-  return store.priced.filter((it) => it.available !== false);
+/**
+ * Strip fields that must never reach a browser. `costCents` is what we pay
+ * Skinsback — publishing it hands every visitor our margin.
+ */
+function toPublic(it: CatalogItem): CatalogItem {
+  if (it.costCents === undefined) return it;
+  const { costCents: _cost, ...rest } = it;
+  void _cost;
+  return rest;
 }
 
+export async function getAllItems(): Promise<CatalogItem[]> {
+  const store = await ensureFresh();
+  // Only buyable items — consumers are the live feed and "hot items" showcase.
+  return store.priced.filter((it) => it.available !== false).map(toPublic);
+}
+
+/** Public lookup: safe to serialise into a page or an API response. */
 export async function getItemById(id: string): Promise<CatalogItem | null> {
+  const item = await getItemForPurchase(id);
+  return item ? toPublic(item) : null;
+}
+
+/**
+ * Server-only lookup that keeps `costCents`. Used by the buy route to cap what
+ * we are willing to pay Skinsback. Never serialise the result to a client.
+ */
+export async function getItemForPurchase(id: string): Promise<CatalogItem | null> {
   const store = await ensureFresh();
   return store.pricedById.get(id) ?? null;
 }
@@ -394,7 +439,7 @@ export async function queryCatalog(f: CatalogFilters): Promise<CatalogResponse> 
   const start = (page - 1) * perPage;
 
   return {
-    items: matched.slice(start, start + perPage),
+    items: matched.slice(start, start + perPage).map(toPublic),
     total: matched.length,
     page,
     perPage,
