@@ -8,15 +8,18 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { formatPrice } from "@/lib/types";
+import { onImgError } from "@/lib/img";
 import { useFeed } from "./useFeed";
 
 const VISIBLE = 12;
 
 export default function FeedTicker() {
   const pathname = usePathname();
-  const events = useFeed(VISIBLE);
+  const { events, status } = useFeed(VISIBLE);
 
   if (pathname?.startsWith("/admin")) return null;
+  // Connection lost: hide the strip rather than showing a frozen list.
+  if (status === "offline") return null;
 
   return (
     <div className="h-12 border-b border-line bg-bg-elevated/60">
@@ -37,7 +40,9 @@ export default function FeedTicker() {
             </div>
           ) : (
             <div className="flex items-center gap-2.5">
-              <AnimatePresence initial={false}>
+              {/* popLayout keeps the exiting chip out of the flow so the strip
+                  never reflows/jumps when a new purchase arrives. */}
+              <AnimatePresence initial={false} mode="popLayout">
                 {events.map((e, i) => (
                   <motion.div
                     key={e.id}
@@ -62,6 +67,7 @@ export default function FeedTicker() {
                         width={32}
                         height={32}
                         loading="lazy"
+                        onError={onImgError}
                         className="h-8 w-8 shrink-0 object-contain"
                       />
                       <span className="max-w-40 truncate text-xs text-ink-dim">

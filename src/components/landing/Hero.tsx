@@ -146,14 +146,17 @@ export default function Hero() {
       <div className="blob -top-24 left-[8%] h-80 w-80 bg-accent/35" />
       <div className="blob right-[4%] top-24 h-96 w-96 bg-violet/35" />
 
-      {/* Generated ambient art — right-anchored, fades to the left so the
-          headline stays on clean dark space. */}
+      {/* Generated ambient art — right-anchored. A radial mask feathers ALL
+          edges (not just the left one), so the bitmap never cuts off with a
+          hard horizontal/vertical line against the page background. */}
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[62%] bg-cover bg-right bg-no-repeat opacity-35 lg:block"
+        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[68%] bg-cover bg-center bg-no-repeat opacity-35 lg:block"
         style={{
           backgroundImage: "url(/art/hero-bg.webp)",
-          maskImage: "linear-gradient(to right, transparent, black 60%)",
-          WebkitMaskImage: "linear-gradient(to right, transparent, black 60%)",
+          maskImage:
+            "radial-gradient(ellipse 78% 88% at 72% 42%, #000 30%, rgba(0,0,0,0.55) 58%, transparent 82%)",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 78% 88% at 72% 42%, #000 30%, rgba(0,0,0,0.55) 58%, transparent 82%)",
         }}
         aria-hidden
       />

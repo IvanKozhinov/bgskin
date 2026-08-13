@@ -104,12 +104,20 @@ export default function Home() {
       <section className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:py-8">
         <Reveal>
           <div className="flex flex-col items-center gap-6 text-center lg:flex-row lg:justify-center lg:gap-5 lg:text-left">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/art/steps-trade.webp"
-              alt="Обмен предметом между игроком и площадкой"
-              loading="lazy"
-              className="h-24 w-24 shrink-0 object-contain drop-shadow-[0_8px_24px_rgba(255,140,0,0.35)] sm:h-28 sm:w-28"
+            {/* Rendered as a masked background layer, not a plain <img>: the
+                artwork has an opaque near-black backdrop, so screen blending
+                drops it and the radial mask feathers the edges — otherwise a
+                hard black square shows against the page. */}
+            <div
+              aria-hidden
+              className="h-28 w-28 shrink-0 bg-contain bg-center bg-no-repeat sm:h-32 sm:w-32"
+              style={{
+                backgroundImage: "url(/art/steps-trade.webp)",
+                mixBlendMode: "screen",
+                maskImage: "radial-gradient(circle at 50% 50%, #000 52%, transparent 76%)",
+                WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000 52%, transparent 76%)",
+                filter: "drop-shadow(0 8px 24px rgba(255,140,0,0.28))",
+              }}
             />
             <div>
               <p className="font-display text-sm font-semibold tracking-widest text-accent">

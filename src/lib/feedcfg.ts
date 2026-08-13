@@ -2,22 +2,11 @@
 // getFeedConfig() so admin changes take effect without a restart.
 
 import { getFeedConfigJson, setFeedConfigJson } from "./db";
+import { FEED_NICKS } from "./nicks";
 import type { FeedConfig } from "./types";
 
-const DEFAULT_NICKS = [
-  "S1mpleKiller", "b1t_wins", "NiKoGOD", "ZywOo_fan", "device_zen", "m0NESYaim",
-  "sh1ro_awp", "Ax1Le_top", "electroNic", "Perfecto", "dupreeh", "Magisk",
-  "karrigan", "rain_ct", "broky_flash", "ropz_clutch", "frozen_one", "Twistzz",
-  "NAF_lurk", "EliGE", "stewie2k", "autimatic", "coldzera", "FalleN_igl",
-  "fer_rush", "TACO_support", "kennyS_scope", "shox_fr", "apEX_rush", "Z-1ne",
-  "flamie", "s1mple_ua", "boombl4", "hobbit_kz", "Jame_awp", "qikert",
-  "buster_ru", "SANJI_top", "degster_", "sh1ro_god", "interz_", "Ax1Le_",
-  "HObbit", "woxic_tr", "XANTARES", "imoRRR", "Calyx_", "MAJ3R",
-  "cadiaN_igl", "stavn_", "sjuush", "TeSeS", "blameF_", "RUSH_b_ru",
-  "GgWpKa", "TarikTime", "n0thing", "skadoodle", "RpK_veteran", "kioShiMa",
-  "smooya_uk", "ALEX_igl", "mezii_", "nawwk_awp", "REZ_swe", "Plopski",
-  "hampus_", "Brollan", "es3tag", "k0nfig_", "aizyesque", "flusha_wh",
-];
+// 1000-entry generated pool (src/lib/nicks.ts). Editable in the admin panel.
+const DEFAULT_NICKS: string[] = [...FEED_NICKS];
 
 export const DEFAULT_FEED_CONFIG: FeedConfig = {
   enabled: true,
