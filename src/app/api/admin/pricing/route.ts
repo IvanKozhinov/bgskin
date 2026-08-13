@@ -2,7 +2,7 @@
 // Skinsback sync (how many offers are cached and when they were fetched).
 
 import { isAdminAuthed } from "@/lib/admin";
-import { isSkinsbackLive } from "@/lib/config";
+import { isSkinsbackLive } from "@/lib/settings";
 import { DEFAULT_PRICING, getPricingConfig, setPricingConfig } from "@/lib/pricing";
 import { getLiveOffers, pricesFetchedAt } from "@/lib/prices";
 import type { PricingConfig } from "@/lib/types";

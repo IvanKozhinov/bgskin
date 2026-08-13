@@ -6,7 +6,7 @@
 // either advances them or fails+refunds — and refunds outright when an order
 // has been stuck past HARD_TIMEOUT_S with no answer from the provider.
 
-import { isSkinsbackLive } from "./config";
+import { isSkinsbackLive } from "./settings";
 import {
   advanceOrderStatus,
   failAndRefundOnce,

@@ -49,6 +49,17 @@ const NAV: NavItem[] = [
     ),
   },
   {
+    href: "/admin/integrations",
+    label: "Интеграции",
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M15 7h2a5 5 0 0 1 0 10h-2" />
+        <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+        <path d="M8 12h8" />
+      </svg>
+    ),
+  },
+  {
     href: "/admin/pricing",
     label: "Цены",
     icon: (

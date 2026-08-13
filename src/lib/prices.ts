@@ -2,7 +2,7 @@
 // lazily refreshed every 10 minutes. Never throws — on fetch failure the stale
 // map is kept and a warning is logged.
 
-import { isSkinsbackLive } from "./config";
+import { isSkinsbackLive } from "./settings";
 import { sbPricelist } from "./skinsback";
 
 const TTL_MS = 10 * 60 * 1000;

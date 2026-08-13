@@ -4,7 +4,7 @@
 // order pending (no blind refund). No demo/instant path.
 
 import { randomUUID } from "node:crypto";
-import { isSkinsbackLive } from "@/lib/config";
+import { isSkinsbackLive } from "@/lib/settings";
 import { getItemForPurchase } from "@/lib/catalog";
 import {
   advanceOrderStatus,

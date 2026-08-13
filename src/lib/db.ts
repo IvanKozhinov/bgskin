@@ -106,6 +106,12 @@ function open(): Database.Database {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS secrets (
+      name TEXT PRIMARY KEY,
+      value_enc TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS pricing_config (
       id INTEGER PRIMARY KEY CHECK (id = 1),
       config TEXT NOT NULL DEFAULT '{}',
@@ -688,6 +694,34 @@ export function setFeedConfigJson(json: string): void {
       "INSERT INTO feed_config (id, config, updated_at) VALUES (1, ?, datetime('now')) ON CONFLICT(id) DO UPDATE SET config = excluded.config, updated_at = datetime('now')",
     )
     .run(json);
+}
+
+// ---- Secrets (provider credentials set from the admin panel) ------------------
+
+export function getSecretRow(name: string): string | null {
+  const r = getDb().prepare("SELECT value_enc FROM secrets WHERE name = ?").get(name) as
+    | { value_enc: string }
+    | undefined;
+  return r?.value_enc ?? null;
+}
+
+export function setSecretRow(name: string, valueEnc: string): void {
+  getDb()
+    .prepare(
+      "INSERT INTO secrets (name, value_enc, updated_at) VALUES (?, ?, datetime('now')) ON CONFLICT(name) DO UPDATE SET value_enc = excluded.value_enc, updated_at = datetime('now')",
+    )
+    .run(name, valueEnc);
+}
+
+export function deleteSecretRow(name: string): void {
+  getDb().prepare("DELETE FROM secrets WHERE name = ?").run(name);
+}
+
+export function secretUpdatedAt(name: string): string | null {
+  const r = getDb().prepare("SELECT updated_at FROM secrets WHERE name = ?").get(name) as
+    | { updated_at: string }
+    | undefined;
+  return r?.updated_at ?? null;
 }
 
 // ---- Pricing config ----------------------------------------------------------

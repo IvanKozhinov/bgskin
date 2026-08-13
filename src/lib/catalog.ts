@@ -13,7 +13,7 @@ import type {
 import { RARITY_META } from "@/lib/types";
 import { getLiveOffers, type SbOffer } from "@/lib/prices";
 import { getPricingConfig, retailCents } from "@/lib/pricing";
-import { isSkinsbackLive } from "@/lib/config";
+import { isSkinsbackLive } from "@/lib/settings";
 
 const MERGE_TTL_MS = 5 * 60 * 1000;
 const DEFAULT_PER_PAGE = 24;

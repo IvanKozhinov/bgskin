@@ -3,7 +3,7 @@
 // signed with the legacy shopid/sign scheme (HMAC-SHA1 over sorted params).
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { skinsbackSecret, skinsbackShopId } from "./config";
+import { skinsbackSecret, skinsbackShopId } from "./settings";
 
 const API_URL = "https://skinsback.com/api.php";
 const REQUEST_TIMEOUT_MS = 15_000;

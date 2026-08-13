@@ -4,13 +4,14 @@
 // provider callback (markDepositPaidOnce).
 
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { siteUrl } from "./config";
 import {
   isHeleketConfigured,
   isSbpConfigured,
   isStripeConfigured,
-  siteUrl,
   stripeSecretKey,
-} from "./config";
+  stripeWebhookSecret,
+} from "./settings";
 import { createDeposit, getDepositRow, setDepositProviderRef } from "./db";
 import type { DepositResponse, PaymentMethodId, PaymentMethodInfo } from "./types";
 
@@ -141,13 +142,13 @@ const WEBHOOK_TOLERANCE_S = 5 * 60; // reject signatures older than 5 minutes (r
 
 /**
  * Verify a Stripe webhook signature and return the deposit id to credit, or
- * null. Requires STRIPE_WEBHOOK_SECRET. Credits ONLY when the session is
+ * null. Requires the Stripe webhook secret. Credits ONLY when the session is
  * actually paid — a `checkout.session.completed` with payment_status other than
  * "paid"/"no_payment_required" (e.g. async methods) is ignored; late settlement
  * arrives as `checkout.session.async_payment_succeeded`.
  */
 export function verifyStripeWebhook(rawBody: string, sigHeader: string | null): number | null {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
+  const secret = stripeWebhookSecret();
   if (!secret || !sigHeader) return null;
 
   // Parse "t=..,v1=..,v1=.." — there may be multiple v1 signatures during key rotation.
