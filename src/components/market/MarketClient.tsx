@@ -506,13 +506,19 @@ export default function MarketClient() {
             </div>
           ) : fetchError ? (
             <div className="panel flex flex-col items-center px-6 py-16 text-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/art/empty-state.webp"
-                alt=""
+              {/* Masked background layer, not an <img>: the asset is fully
+                  opaque with a near-black backdrop, so screen blending drops it
+                  and the radial mask feathers the edges — otherwise a hard
+                  black square shows against the panel. */}
+              <div
                 aria-hidden
-                loading="lazy"
-                className="h-40 w-40 object-contain opacity-90"
+                className="h-40 w-40 bg-contain bg-center bg-no-repeat opacity-90"
+                style={{
+                  backgroundImage: "url(/art/empty-state.webp)",
+                  mixBlendMode: "screen",
+                  maskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 78%)",
+                  WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 78%)",
+                }}
               />
               <h2 className="mt-4 font-display text-xl font-bold">Не удалось загрузить каталог</h2>
               <p className="mt-1 max-w-sm text-sm text-ink-dim">
@@ -532,13 +538,19 @@ export default function MarketClient() {
             </div>
           ) : items.length === 0 ? (
             <div className="panel flex flex-col items-center px-6 py-16 text-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/art/empty-state.webp"
-                alt=""
+              {/* Masked background layer, not an <img>: the asset is fully
+                  opaque with a near-black backdrop, so screen blending drops it
+                  and the radial mask feathers the edges — otherwise a hard
+                  black square shows against the panel. */}
+              <div
                 aria-hidden
-                loading="lazy"
-                className="h-40 w-40 object-contain opacity-90"
+                className="h-40 w-40 bg-contain bg-center bg-no-repeat opacity-90"
+                style={{
+                  backgroundImage: "url(/art/empty-state.webp)",
+                  mixBlendMode: "screen",
+                  maskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 78%)",
+                  WebkitMaskImage: "radial-gradient(circle at 50% 50%, #000 54%, transparent 78%)",
+                }}
               />
               <h2 className="mt-4 font-display text-xl font-bold">Ничего не найдено</h2>
               <p className="mt-1 max-w-sm text-sm text-ink-dim">

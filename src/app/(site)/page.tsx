@@ -206,8 +206,13 @@ export default function Home() {
                 backgroundSize: "auto 168%",
                 mixBlendMode: "screen",
                 opacity: 0.6,
-                maskImage: "radial-gradient(62% 82% at 78% 54%, #000 28%, transparent 70%)",
-                WebkitMaskImage: "radial-gradient(62% 82% at 78% 54%, #000 28%, transparent 70%)",
+                // Radii/centre chosen so alpha reaches 0 before every edge:
+                // right 30/32=0.94, left 70/32=2.2, top 54/46=1.17, bottom
+                // 46/46=1.0 — all ≥ the 0.9 transparent stop.
+                maskImage:
+                  "radial-gradient(32% 46% at 70% 54%, #000 30%, rgba(0,0,0,0.5) 62%, transparent 90%)",
+                WebkitMaskImage:
+                  "radial-gradient(32% 46% at 70% 54%, #000 30%, rgba(0,0,0,0.5) 62%, transparent 90%)",
               }}
             />
             <div className="relative">
