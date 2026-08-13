@@ -16,6 +16,24 @@ import type { CatalogItem, ItemCategory, RarityId } from "../src/lib/types";
 const SOURCE_URL =
   "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en/skins.json";
 
+const API_BASE = "https://raw.githubusercontent.com/ByMykel/CSGO-API/main/public/api/en";
+
+/**
+ * Non-skin inventory Skinsback also sells (cases, stickers, agents …). These
+ * feeds carry `market_hash_name`, which is exactly the key the Skinsback price
+ * list uses, so matching is exact. `label` becomes the item's "weapon" facet.
+ */
+const EXTRA_SOURCES: { file: string; label: string }[] = [
+  { file: "crates", label: "Кейсы" },
+  { file: "stickers", label: "Наклейки" },
+  { file: "agents", label: "Агенты" },
+  { file: "patches", label: "Нашивки" },
+  { file: "music_kits", label: "Музыка" },
+  { file: "keys", label: "Ключи" },
+  { file: "graffiti", label: "Граффити" },
+  { file: "collectibles", label: "Коллекционное" },
+];
+
 const SEED_TARGET = 250;
 
 /** Weapons whose every skin goes into the seed subset. */
@@ -65,6 +83,16 @@ const RARITY_MAP: Record<string, RarityId> = {
   Covert: "covert",
   Contraband: "contraband",
   Extraordinary: "extraordinary",
+  // Grades used by stickers, agents, patches, graffiti and music kits.
+  "Base Grade": "consumer",
+  "High Grade": "milspec",
+  Remarkable: "restricted",
+  Exotic: "classified",
+  Distinguished: "industrial",
+  Exceptional: "milspec",
+  Superior: "restricted",
+  Master: "classified",
+  Immortal: "covert",
 };
 
 /** 32-bit FNV-1a hash. Must stay in sync with src/lib/catalog.ts. */
@@ -86,9 +114,8 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-function transform(raw: RawSkin[]): CatalogItem[] {
+function transform(raw: RawSkin[], seen: Map<string, number>): CatalogItem[] {
   const items: CatalogItem[] = [];
-  const seen = new Map<string, number>();
   let skippedNoImage = 0;
   let skippedBad = 0;
 
@@ -148,6 +175,76 @@ function transform(raw: RawSkin[]): CatalogItem[] {
   return items;
 }
 
+/** Raw shape shared by the crates/stickers/agents/... feeds. */
+interface RawExtra {
+  name?: string;
+  market_hash_name?: string | null;
+  image?: string | null;
+  rarity?: { name?: string } | null;
+}
+
+/**
+ * Turn a non-skin feed into catalog items. Keyed by market_hash_name so the
+ * Skinsback price list matches exactly; entries without one are unsellable and
+ * therefore skipped.
+ */
+function transformExtras(raw: RawExtra[], label: string, seen: Map<string, number>): CatalogItem[] {
+  const items: CatalogItem[] = [];
+  for (const e of raw) {
+    const name = (e.market_hash_name ?? "").trim() || (e.name ?? "").trim();
+    const image = typeof e.image === "string" ? e.image.trim() : "";
+    if (!name || !image) continue;
+
+    const baseSlug = slugify(name);
+    if (!baseSlug) continue;
+    const nth = (seen.get(baseSlug) ?? 0) + 1;
+    seen.set(baseSlug, nth);
+    const id = nth === 1 ? baseSlug : `${baseSlug}-${nth}`;
+
+    items.push({
+      id,
+      name,
+      weapon: label,
+      category: "other",
+      rarity: RARITY_MAP[e.rarity?.name ?? ""] ?? "consumer",
+      image,
+      minFloat: 0,
+      maxFloat: 1,
+      stattrak: false,
+      souvenir: false,
+      kind: "extra",
+      priceCents: 0,
+      popularity: fnv1a(id) % 101,
+    });
+  }
+  return items;
+}
+
+async function fetchExtras(seen: Map<string, number>): Promise<CatalogItem[]> {
+  const out: CatalogItem[] = [];
+  for (const src of EXTRA_SOURCES) {
+    const url = `${API_BASE}/${src.file}.json`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn(`  ${src.file}: HTTP ${res.status} — skipped`);
+        continue;
+      }
+      const parsed: unknown = JSON.parse(await res.text());
+      if (!Array.isArray(parsed)) {
+        console.warn(`  ${src.file}: unexpected payload — skipped`);
+        continue;
+      }
+      const items = transformExtras(parsed as RawExtra[], src.label, seen);
+      out.push(...items);
+      console.log(`  ${src.file}: ${items.length} items (${src.label})`);
+    } catch (err) {
+      console.warn(`  ${src.file}: failed (${String(err)}) — skipped`);
+    }
+  }
+  return out;
+}
+
 function buildSeed(items: CatalogItem[]): CatalogItem[] {
   // Round-robin across the popular weapons so each is represented, capped at
   // SEED_TARGET; if the popular set is smaller than the target, top up with
@@ -189,13 +286,21 @@ async function main(): Promise<void> {
   if (!Array.isArray(parsed)) {
     throw new Error("Unexpected payload: expected a top-level JSON array.");
   }
-  const items = transform(parsed as RawSkin[]);
-  if (items.length < 500) {
-    throw new Error(
-      `Sanity check failed: only ${items.length} items after transform.`
-    );
+  // One shared slug registry keeps ids unique across skins and extras.
+  const seen = new Map<string, number>();
+  const skins = transform(parsed as RawSkin[], seen);
+  if (skins.length < 500) {
+    throw new Error(`Sanity check failed: only ${skins.length} items after transform.`);
   }
-  const seed = buildSeed(items);
+
+  console.log("Downloading non-skin inventory (cases, stickers, agents …) ...");
+  const extras = await fetchExtras(seen);
+  const items = [...skins, ...extras];
+  console.log(`Catalog: ${skins.length} skins + ${extras.length} other items = ${items.length}.`);
+
+  // The committed fallback stays skins-only — it exists to keep the storefront
+  // presentable when data/catalog.json is missing.
+  const seed = buildSeed(skins);
 
   const dataDir = path.join(process.cwd(), "data");
   mkdirSync(dataDir, { recursive: true });

@@ -277,14 +277,15 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
       };
     }
     // Demo mode: deterministic demo cost, marked up the same way so the
-    // storefront shows exactly the arithmetic live mode will use.
+    // storefront shows exactly the arithmetic live mode will use. Non-skin
+    // inventory stays hidden until Skinsback quotes it for real.
     const cost = demoPriceCents(it);
     return {
       ...it,
       priceCents: retailCents(cost, cfg),
       costCents: cost,
       stock: undefined,
-      available: true,
+      available: it.kind !== "extra",
     };
   });
 

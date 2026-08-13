@@ -41,6 +41,12 @@ export interface CatalogItem {
   maxFloat: number;
   stattrak: boolean; // stattrak variant exists
   souvenir: boolean;
+  /**
+   * "extra" = non-skin inventory (case, sticker, agent, graffiti …). These are
+   * only listed when Skinsback actually quotes a price for them: a fabricated
+   * demo price for a sticker is meaningless.
+   */
+  kind?: "skin" | "extra";
   collection?: string;
   priceCents: number; // price shown to the buyer (Skinsback cost + markup), cents USD
   costCents?: number; // what Skinsback charges us, cents USD — never shown to buyers
