@@ -146,17 +146,21 @@ export default function Hero() {
       <div className="blob -top-24 left-[8%] h-80 w-80 bg-accent/35" />
       <div className="blob right-[4%] top-24 h-96 w-96 bg-violet/35" />
 
-      {/* Generated ambient art — right-anchored. A radial mask feathers ALL
-          edges (not just the left one), so the bitmap never cuts off with a
-          hard horizontal/vertical line against the page background. */}
+      {/* Generated ambient art — right-anchored.
+          The mask MUST reach full transparency before every edge of this box,
+          otherwise the bitmap ends on a hard line (the section is
+          overflow-hidden, so anything still opaque at an edge gets sliced).
+          With centre (58%, 44%) and radii (40%, 46%), the distance to each edge
+          in radius units is: right 42/40=1.05, left 58/40=1.45, top 44/46=0.96,
+          bottom 56/46=1.22 — all ≥ the 0.92 stop where the gradient hits zero. */}
       <div
-        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[68%] bg-cover bg-center bg-no-repeat opacity-35 lg:block"
+        className="pointer-events-none absolute inset-y-0 right-0 hidden w-[78%] bg-cover bg-center bg-no-repeat opacity-55 lg:block"
         style={{
           backgroundImage: "url(/art/hero-bg.webp)",
           maskImage:
-            "radial-gradient(ellipse 78% 88% at 72% 42%, #000 30%, rgba(0,0,0,0.55) 58%, transparent 82%)",
+            "radial-gradient(ellipse 40% 46% at 58% 44%, #000 42%, rgba(0,0,0,0.78) 62%, rgba(0,0,0,0.32) 79%, transparent 93%)",
           WebkitMaskImage:
-            "radial-gradient(ellipse 78% 88% at 72% 42%, #000 30%, rgba(0,0,0,0.55) 58%, transparent 82%)",
+            "radial-gradient(ellipse 40% 46% at 58% 44%, #000 42%, rgba(0,0,0,0.78) 62%, rgba(0,0,0,0.32) 79%, transparent 93%)",
         }}
         aria-hidden
       />
