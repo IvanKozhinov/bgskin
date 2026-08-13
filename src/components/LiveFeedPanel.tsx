@@ -43,8 +43,12 @@ export default function LiveFeedPanel() {
     <section className="panel overflow-hidden">
       <div className="flex items-center gap-2.5 border-b border-line px-5 py-4">
         <span className="live-dot" />
-        <h2 className="font-display text-lg font-bold tracking-wide">Лайв-лента</h2>
-        <span className="ml-auto text-xs text-ink-faint">покупки в реальном времени</span>
+        <h2 className="whitespace-nowrap font-display text-lg font-bold tracking-wide">
+          Лайв-лента
+        </h2>
+        <span className="ml-auto hidden text-xs text-ink-faint sm:inline">
+          покупки в реальном времени
+        </span>
       </div>
 
       <ul
