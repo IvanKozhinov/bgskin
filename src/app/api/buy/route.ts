@@ -13,6 +13,7 @@ import {
   getOrderById,
   getUser,
   setOrderSkinsbackId,
+  setOrderTradeOfferId,
   tryDebit,
 } from "@/lib/db";
 import { getSessionSteamId } from "@/lib/session";
@@ -235,6 +236,7 @@ async function liveBuy(
       customId,
     });
     setOrderSkinsbackId(order.id, bought.buyId);
+    setOrderTradeOfferId(customId, bought.tradeOfferId);
 
     // market_buy can come back already terminal (bad trade token, user not
     // tradable, trade_create_error…). Reporting success there would leave the
@@ -262,6 +264,7 @@ async function liveBuy(
     try {
       const info = await sbOrderInfo(customId);
       if (info.buyId) setOrderSkinsbackId(order.id, info.buyId);
+      setOrderTradeOfferId(customId, info.tradeOfferId);
       if (FAILED_OFFER.has(info.offerStatus)) {
         failAndRefundOnce(customId);
         return json({ ok: false, error: "Покупка не удалась, средства возвращены" }, 502);

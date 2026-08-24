@@ -30,6 +30,23 @@ const STATUS_META: Record<OrderStatus, { label: string; cls: string }> = {
   demo_delivered: { label: "Доставлен", cls: "border-pos/40 text-pos bg-pos/10" },
 };
 
+/**
+ * Direct link to the Steam trade offer. Skinsback creates the offer on its side;
+ * without this the buyer has to dig through their Steam notifications to find it.
+ */
+function TradeOfferLink({ id }: { id: string }) {
+  return (
+    <a
+      href={`https://steamcommunity.com/tradeoffer/${id}/`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="whitespace-nowrap text-xs font-medium text-accent underline-offset-2 hover:underline"
+    >
+      Принять трейд →
+    </a>
+  );
+}
+
 function StatusBadge({ status }: { status: OrderStatus }) {
   const meta = STATUS_META[status];
   return (
@@ -407,7 +424,13 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
                       </td>
                       <td className="py-3 pr-4 text-ink-dim">{orderDate(o.createdAt)}</td>
                       <td className="py-3">
-                        <StatusBadge status={o.status} />
+                        <div className="flex items-center gap-2">
+                          <StatusBadge status={o.status} />
+                    {o.tradeOfferId && o.status === "sent" && <TradeOfferLink id={o.tradeOfferId} />}
+                          {o.tradeOfferId && o.status === "sent" && (
+                            <TradeOfferLink id={o.tradeOfferId} />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

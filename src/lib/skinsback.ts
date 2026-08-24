@@ -173,7 +173,7 @@ export async function sbBuyById(opts: {
   partner: string;
   token: string;
   customId: string;
-}): Promise<{ buyId: string; offerStatus: string; debitedUsd: number }> {
+}): Promise<{ buyId: string; offerStatus: string; debitedUsd: number; tradeOfferId: string }> {
   const json = await sbCall("market_buy", {
     id: opts.id,
     max_price: opts.maxPriceUsd.toFixed(2),
@@ -186,6 +186,7 @@ export async function sbBuyById(opts: {
     buyId: toStr(json.buy_id ?? json.id ?? item?.buy_id),
     offerStatus: toStr(json.offer_status ?? item?.offer_status) || "pending",
     debitedUsd: toNumber(json.balance_debited_sum ?? json.debited_sum ?? item?.price),
+    tradeOfferId: toStr(json.tradeofferid ?? json.trade_offer_id ?? item?.tradeofferid),
   };
 }
 
@@ -194,7 +195,9 @@ export async function sbBuyById(opts: {
  * Skinsback answers either as a flat object (single purchase) or under
  * `items`/`orders` (batch lookups), so both shapes are accepted.
  */
-export async function sbOrderInfo(customId: string): Promise<{ offerStatus: string; buyId: string }> {
+export async function sbOrderInfo(
+  customId: string,
+): Promise<{ offerStatus: string; buyId: string; tradeOfferId: string }> {
   const json = await sbCall("market_getinfo", { custom_ids: [customId] });
 
   const list = Array.isArray(json.items)
@@ -215,6 +218,7 @@ export async function sbOrderInfo(customId: string): Promise<{ offerStatus: stri
   return {
     offerStatus: toStr(record.offer_status ?? record.status),
     buyId: toStr(record.buy_id ?? record.id),
+    tradeOfferId: toStr(record.tradeofferid ?? record.trade_offer_id),
   };
 }
 

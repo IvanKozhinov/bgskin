@@ -45,6 +45,7 @@ function open(): Database.Database {
       price_cents INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       skinsback_order_id TEXT,
+      trade_offer_id TEXT,
       custom_id TEXT UNIQUE,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -159,6 +160,12 @@ function open(): Database.Database {
     db.prepare("UPDATE admins SET username = ? WHERE id = 1").run(adminUser());
   }
 
+  // Older databases predate trade_offer_id.
+  const orderCols = db.prepare("PRAGMA table_info(orders)").all() as { name: string }[];
+  if (!orderCols.some((c) => c.name === "trade_offer_id")) {
+    db.prepare("ALTER TABLE orders ADD COLUMN trade_offer_id TEXT").run();
+  }
+
   db.prepare(
     "INSERT INTO feed_config (id, config) VALUES (1, '{}') ON CONFLICT(id) DO NOTHING",
   ).run();
@@ -244,6 +251,7 @@ interface DbOrder {
   price_cents: number;
   status: OrderStatus;
   skinsback_order_id: string | null;
+  trade_offer_id: string | null;
   custom_id: string | null;
   created_at: string;
   updated_at: string;
@@ -284,6 +292,7 @@ function rowToOrder(r: DbOrder): Order {
     priceCents: r.price_cents,
     status: r.status,
     createdAt: r.created_at,
+    ...(r.trade_offer_id ? { tradeOfferId: r.trade_offer_id } : {}),
   };
 }
 
@@ -456,6 +465,16 @@ export function refundRolledBackOrder(customId: string): boolean {
   const done = tx(customId);
   if (done) console.warn(`[orders] rollback refund issued for order ${customId}`);
   return done;
+}
+
+/** Record the Steam trade offer so the buyer gets a direct link to accept it. */
+export function setOrderTradeOfferId(customId: string, tradeOfferId: string): void {
+  if (!tradeOfferId) return;
+  getDb()
+    .prepare(
+      "UPDATE orders SET trade_offer_id = ?, updated_at = datetime('now') WHERE custom_id = ? AND (trade_offer_id IS NULL OR trade_offer_id = '')",
+    )
+    .run(tradeOfferId, customId);
 }
 
 export function setOrderSkinsbackId(orderId: number, skinsbackOrderId: string): void {

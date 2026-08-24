@@ -12,6 +12,7 @@ import {
   failAndRefundOnce,
   listStaleOpenOrders,
   refundRolledBackOrder,
+  setOrderTradeOfferId,
 } from "./db";
 import { sbOrderInfo, SkinsbackApiError } from "./skinsback";
 import type { OrderStatus } from "./types";
@@ -63,6 +64,7 @@ async function run(): Promise<ReconcileResult> {
     result.checked++;
     try {
       const info = await sbOrderInfo(order.customId);
+      setOrderTradeOfferId(order.customId, info.tradeOfferId);
       const next = mapOfferStatus(info.offerStatus);
       if (info.offerStatus === "rollback_user" || info.offerStatus === "rollback_supplier") {
         if (refundRolledBackOrder(order.customId)) result.refunded++;

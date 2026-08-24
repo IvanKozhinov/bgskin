@@ -111,6 +111,8 @@ export interface Order {
   priceCents: number;
   status: OrderStatus;
   createdAt: string; // ISO
+  /** Steam trade offer id, once Skinsback has created the offer. */
+  tradeOfferId?: string;
 }
 
 export interface FeedEvent {

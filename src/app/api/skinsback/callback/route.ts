@@ -7,6 +7,7 @@ import {
   failAndRefundOnce,
   getOrderRowByCustomId,
   refundRolledBackOrder,
+  setOrderTradeOfferId,
 } from "@/lib/db";
 import { verifyWebhookSignature } from "@/lib/skinsback";
 import type { OrderStatus } from "@/lib/types";
@@ -66,6 +67,8 @@ export async function POST(request: Request): Promise<Response> {
     if (customId && offerStatus) {
       const row = getOrderRowByCustomId(customId);
       if (row) {
+        // Skinsback sends the Steam offer id as soon as the trade exists.
+        setOrderTradeOfferId(customId, asStr(data.tradeofferid));
         const nextStatus = mapOfferStatus(offerStatus);
         if (offerStatus === "rollback_user" || offerStatus === "rollback_supplier") {
           // Steam Trade Protection pulled the item back — even a "delivered"
