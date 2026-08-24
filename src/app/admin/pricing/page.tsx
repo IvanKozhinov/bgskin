@@ -3,7 +3,7 @@ import { requireAdminPage } from "@/lib/admin-guard";
 import PricingForm from "@/components/admin/PricingForm";
 
 export const metadata: Metadata = {
-  title: "Цены — Админка BGASkins",
+  title: "Цены — Админка BGSkins",
   robots: { index: false, follow: false },
 };
 

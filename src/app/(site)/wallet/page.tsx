@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/session";
 import WalletClient from "@/components/wallet/WalletClient";
 
 export const metadata: Metadata = {
-  title: "Кошелёк — BGASkins.cc",
+  title: "Кошелёк — BGSkins.pro",
   description: "Пополнение баланса и история операций.",
 };
 

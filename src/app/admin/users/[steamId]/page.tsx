@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Пользователь — BGASkins.cc",
+  title: "Пользователь — BGSkins.pro",
 };
 
 type Props = { params: Promise<{ steamId: string }> };

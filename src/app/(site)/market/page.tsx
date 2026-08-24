@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import MarketClient from "@/components/market/MarketClient";
 
 export const metadata: Metadata = {
-  title: "Маркет — BGASkins.cc",
+  title: "Маркет — BGSkins.pro",
   description: "Каталог скинов CS2: винтовки, пистолеты, ножи и перчатки с мгновенной доставкой.",
 };
 

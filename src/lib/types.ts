@@ -1,4 +1,4 @@
-// Shared contracts for BGASkins. Single source of truth — import, never redefine.
+// Shared contracts for BGSkins. Single source of truth — import, never redefine.
 
 export type ItemCategory =
   | "pistol"

@@ -1,5 +1,5 @@
 /**
- * Генерация фирменных артов BGASkins через OpenRouter (GPT Image 2).
+ * Генерация фирменных артов BGSkins через OpenRouter (GPT Image 2).
  *
  * Запуск:  OPENROUTER_API_KEY=sk-or-... npx tsx scripts/generate-art.ts [only-slug]
  * Результат: public/art/<slug>.png  (+ манифест public/art/manifest.json)

@@ -29,10 +29,10 @@ type Props = { params: Promise<{ id: string }> };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { id } = await params;
   const item = await getItemById(id);
-  if (!item) return { title: "Предмет не найден — BGASkins.cc" };
+  if (!item) return { title: "Предмет не найден — BGSkins.pro" };
   return {
-    title: `${item.name} — BGASkins.cc`,
-    description: `Купить ${item.name} за ${formatPrice(item.priceCents)} с мгновенной доставкой на BGASkins.cc`,
+    title: `${item.name} — BGSkins.pro`,
+    description: `Купить ${item.name} за ${formatPrice(item.priceCents)} с мгновенной доставкой на BGSkins.pro`,
   };
 }
 

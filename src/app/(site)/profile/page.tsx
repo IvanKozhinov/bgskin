@@ -6,7 +6,7 @@ import { getSessionUser } from "@/lib/session";
 import ProfileClient from "@/components/profile/ProfileClient";
 
 export const metadata: Metadata = {
-  title: "Профиль — BGASkins.cc",
+  title: "Профиль — BGSkins.pro",
   description: "Баланс, трейд-ссылка, пополнения и история покупок.",
 };
 

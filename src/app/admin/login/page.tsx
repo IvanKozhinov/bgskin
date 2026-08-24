@@ -4,7 +4,7 @@ import { isAdminAuthed } from "@/lib/admin";
 import AdminLogin from "@/components/admin/AdminLogin";
 
 export const metadata: Metadata = {
-  title: "Вход — Админка BGASkins",
+  title: "Вход — Админка BGSkins",
   robots: { index: false, follow: false },
 };
 

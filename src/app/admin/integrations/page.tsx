@@ -3,7 +3,7 @@ import { requireAdminPage } from "@/lib/admin-guard";
 import IntegrationsForm from "@/components/admin/IntegrationsForm";
 
 export const metadata: Metadata = {
-  title: "Интеграции — Админка BGASkins",
+  title: "Интеграции — Админка BGSkins",
   robots: { index: false, follow: false },
 };
 

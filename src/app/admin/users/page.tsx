@@ -8,7 +8,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Пользователи — BGASkins.cc",
+  title: "Пользователи — BGSkins.pro",
 };
 
 const PAGE_SIZE = 50;

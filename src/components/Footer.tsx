@@ -18,8 +18,8 @@ export default function Footer() {
                 B
               </span>
               <span className="font-display text-lg font-bold tracking-wide">
-                BGA<span className="text-accent">Skins</span>
-                <span className="text-ink-faint">.cc</span>
+                BG<span className="text-accent">Skins</span>
+                <span className="text-ink-faint">.pro</span>
               </span>
             </div>
             <p className="mt-3 text-sm leading-relaxed text-ink-dim">
@@ -65,7 +65,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-8 flex flex-col gap-2 border-t border-line pt-6 text-xs text-ink-faint sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} BGASkins.cc — не аффилирован с Valve Corp.</span>
+          <span>© {new Date().getFullYear()} BGSkins.pro — не аффилирован с Valve Corp.</span>
           <span>Counter-Strike 2 является товарным знаком Valve Corporation.</span>
         </div>
       </div>

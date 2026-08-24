@@ -4,7 +4,7 @@ import { isAdminAuthed } from "@/lib/admin";
 import AdminShell from "@/components/admin/AdminShell";
 
 export const metadata: Metadata = {
-  title: "BGASkins — Админка",
+  title: "BGSkins — Админка",
   robots: { index: false, follow: false },
 };
 

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Панель — BGASkins.cc",
+  title: "Панель — BGSkins.pro",
 };
 
 function StatCard({

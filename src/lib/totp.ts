@@ -27,10 +27,10 @@ export function otpauthUrl(username: string, secret: string): string {
     try {
       return new URL(siteUrl()).host;
     } catch {
-      return "BGASkins";
+      return "BGSkins";
     }
   })();
-  return generateURI({ issuer: `BGASkins (${host})`, label: username, secret });
+  return generateURI({ issuer: `BGSkins (${host})`, label: username, secret });
 }
 
 export async function totpQrDataUrl(username: string, secret: string): Promise<string> {

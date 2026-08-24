@@ -86,7 +86,7 @@ function loadBaseItems(): CatalogItem[] {
     }
   }
   throw new Error(
-    "BGASkins: neither data/catalog.json nor data/catalog.seed.json is readable. Run `npx tsx scripts/fetch-catalog.ts`."
+    "BGSkins: neither data/catalog.json nor data/catalog.seed.json is readable. Run `npx tsx scripts/fetch-catalog.ts`."
   );
 }
 

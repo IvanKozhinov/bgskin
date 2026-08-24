@@ -75,7 +75,7 @@ async function stripeCheckout(depositId: number, amountCents: number): Promise<s
   body.set("line_items[0][quantity]", "1");
   body.set("line_items[0][price_data][currency]", "usd");
   body.set("line_items[0][price_data][unit_amount]", String(amountCents));
-  body.set("line_items[0][price_data][product_data][name]", "Пополнение баланса BGASkins");
+  body.set("line_items[0][price_data][product_data][name]", "Пополнение баланса BGSkins");
   body.set("metadata[deposit_id]", String(depositId));
   try {
     const res = await fetch("https://api.stripe.com/v1/checkout/sessions", {

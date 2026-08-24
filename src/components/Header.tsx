@@ -106,8 +106,8 @@ export default function Header() {
             B
           </span>
           <span className="font-display text-xl font-bold tracking-wide">
-            BGA<span className="text-accent">Skins</span>
-            <span className="text-ink-faint">.cc</span>
+            BG<span className="text-accent">Skins</span>
+            <span className="text-ink-faint">.pro</span>
           </span>
         </Link>
 

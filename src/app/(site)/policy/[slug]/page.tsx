@@ -42,10 +42,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { slug } = await params;
   const p = getPolicy(slug);
-  if (!p || !p.published) return { title: "Документ не найден — BGASkins.cc" };
+  if (!p || !p.published) return { title: "Документ не найден — BGSkins.pro" };
   return {
-    title: `${p.title} — BGASkins.cc`,
-    description: `${p.title} — BGASkins.cc.`,
+    title: `${p.title} — BGSkins.pro`,
+    description: `${p.title} — BGSkins.pro.`,
   };
 }
 

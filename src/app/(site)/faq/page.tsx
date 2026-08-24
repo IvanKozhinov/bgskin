@@ -10,8 +10,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "FAQ — BGASkins.cc",
-  description: "Правила сервиса и ответы на частые вопросы о покупке скинов CS2 на BGASkins.cc.",
+  title: "FAQ — BGSkins.pro",
+  description: "Правила сервиса и ответы на частые вопросы о покупке скинов CS2 на BGSkins.pro.",
 };
 
 // Tailwind descendant styling for the injected Markdown HTML.

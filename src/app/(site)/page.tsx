@@ -1,4 +1,4 @@
-// BGASkins.cc landing page. Server shell; interactive sections live in
+// BGSkins.pro landing page. Server shell; interactive sections live in
 // client components under src/components/landing/.
 
 import Link from "next/link";

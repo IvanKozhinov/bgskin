@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Лайв-лента — Админка BGASkins",
+  title: "Лайв-лента — Админка BGSkins",
   robots: { index: false, follow: false },
 };
 

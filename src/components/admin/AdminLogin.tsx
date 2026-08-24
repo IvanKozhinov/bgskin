@@ -93,8 +93,8 @@ export default function AdminLogin() {
             B
           </span>
           <h1 className="mt-4 font-display text-2xl font-bold tracking-wide">
-            BGA<span className="text-accent">Skins</span>
-            <span className="text-ink-faint">.cc</span>
+            BG<span className="text-accent">Skins</span>
+            <span className="text-ink-faint">.pro</span>
           </h1>
           <p className="mt-1 text-sm text-ink-dim">Панель администратора</p>
         </div>
@@ -192,7 +192,7 @@ export default function AdminLogin() {
         </div>
 
         <p className="mt-6 text-center text-xs text-ink-faint">
-          Доступ только для персонала BGASkins.cc
+          Доступ только для персонала BGSkins.pro
         </p>
       </div>
     </div>

@@ -3,7 +3,7 @@ import { requireAdminSessionPage } from "@/lib/admin-guard";
 import TwoFactorSetup from "@/components/admin/TwoFactorSetup";
 
 export const metadata: Metadata = {
-  title: "2FA — Админка BGASkins",
+  title: "2FA — Админка BGSkins",
   robots: { index: false, follow: false },
 };
 

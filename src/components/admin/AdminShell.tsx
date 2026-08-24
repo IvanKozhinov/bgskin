@@ -159,7 +159,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
               B
             </span>
             <span className="font-display text-lg font-bold tracking-wide">
-              BGA<span className="text-accent">Skins</span>
+              BG<span className="text-accent">Skins</span>
               <span className="ml-2 rounded-md border border-violet/40 bg-violet/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-violet">
                 Admin
               </span>
@@ -196,7 +196,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           {navLinks}
           <div className="mt-6 border-t border-line pt-4">
             <p className="px-3.5 text-[11px] uppercase tracking-wider text-ink-faint">
-              BGASkins.cc
+              BGSkins.pro
             </p>
           </div>
         </aside>

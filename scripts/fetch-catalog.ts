@@ -1,5 +1,5 @@
 /**
- * BGASkins catalog fetcher.
+ * BGSkins catalog fetcher.
  *
  * Downloads the ByMykel/CSGO-API grouped skins list, slims it down to the
  * CatalogItem shape from src/lib/types.ts and writes:
