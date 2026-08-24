@@ -24,7 +24,7 @@ interface FormState {
   tiers: { upto: string; percent: string }[];
 }
 
-const PREVIEW_COSTS = [30, 100, 500, 2500, 10000, 50000]; // cents
+const PREVIEW_COSTS = [3000, 10_000, 50_000, 250_000, 1_000_000, 5_000_000]; // kopecks
 
 function Field({
   label,
@@ -52,7 +52,8 @@ const num = (s: string, fallback = 0): number => {
   const n = parseFloat(s.replace(",", "."));
   return Number.isFinite(n) ? n : fallback;
 };
-const money = (cents: number) => `$${(cents / 100).toFixed(2)}`;
+const money = (kopecks: number) =>
+  `${(kopecks / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })} \u20bd`;
 
 /** Mirrors src/lib/pricing.ts so the preview matches the server exactly. */
 function retail(costCents: number, f: FormState): number {
@@ -225,7 +226,7 @@ export default function PricingForm() {
 
           <Field
             label="Минимальная наценка"
-            hint="Абсолютный минимум прибыли с предмета, в центах."
+            hint="Абсолютный минимум прибыли с предмета, в копейках."
             htmlFor="minMarkupCents"
           >
             <div className="flex items-center gap-2">
@@ -237,13 +238,13 @@ export default function PricingForm() {
                 value={form.minMarkupCents}
                 onChange={(e) => update("minMarkupCents", e.target.value)}
               />
-              <span className="shrink-0 text-sm text-ink-faint">¢</span>
+              <span className="shrink-0 text-sm text-ink-faint">коп.</span>
             </div>
           </Field>
 
           <Field
             label="Округление"
-            hint="1 — до цента, 10 — до $0.10, 100 — до доллара. Всегда вверх."
+            hint="1 — до копейки, 100 — до рубля, 1000 — до 10 ₽. Всегда вверх."
             htmlFor="roundToCents"
           >
             <input
@@ -302,7 +303,7 @@ export default function PricingForm() {
           )}
           {form.tiers.map((t, i) => (
             <div key={i} className="flex items-center gap-2">
-              <span className="shrink-0 text-sm text-ink-dim">до $</span>
+              <span className="shrink-0 text-sm text-ink-dim">до</span>
               <input
                 className="input sm:max-w-32"
                 type="number"
@@ -315,6 +316,7 @@ export default function PricingForm() {
                   update("tiers", tiers);
                 }}
               />
+              <span className="shrink-0 text-sm text-ink-faint">₽</span>
               <span className="shrink-0 text-sm text-ink-dim">→</span>
               <input
                 className="input sm:max-w-28"

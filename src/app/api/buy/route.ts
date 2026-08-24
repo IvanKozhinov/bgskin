@@ -18,6 +18,7 @@ import {
 } from "@/lib/db";
 import { getSessionSteamId } from "@/lib/session";
 import { getPricingConfig, maxAcceptableCostCents, retailCents } from "@/lib/pricing";
+import { rubKopecksToUsdCents, usdCentsToRubKopecks, usdToRub } from "@/lib/currency";
 import { logEvent } from "@/lib/events";
 import {
   parseTradeUrl,
@@ -156,11 +157,14 @@ async function liveBuy(
   item: CatalogItem,
   trade: { partner: string; token: string },
 ): Promise<Response> {
-  // Cost basis: what Skinsback may charge us. Derived from the CURRENT cost of
-  // this item, never from the buyer price — the markup must not be spent as
-  // slippage. Falls back to the buyer price only if the cost is unknown.
+  // Two currencies in play: the buyer pays roubles, Skinsback charges dollars.
+  // costCents is USD; priceCents is RUB kopecks. Everything compared against the
+  // provider must be converted to USD first.
   const cfg = getPricingConfig();
-  const costBasisCents = item.costCents && item.costCents > 0 ? item.costCents : item.priceCents;
+  const rate = await usdToRub();
+  const buyerPaidUsdCents = rubKopecksToUsdCents(item.priceCents, rate);
+  const costBasisCents =
+    item.costCents && item.costCents > 0 ? item.costCents : buyerPaidUsdCents;
 
   // Find a purchasable offer BEFORE debiting.
   let cheapestId: string;
@@ -193,8 +197,9 @@ async function liveBuy(
     return json({ ok: false, error: "Магазин временно недоступен, попробуйте позже" }, 502);
   }
 
-  // Capped by what the buyer paid: a slip we accept must never exceed the sale.
-  const maxCostCents = maxAcceptableCostCents(costBasisCents, cfg, item.priceCents);
+  // Capped by what the buyer paid (converted to USD): a slip we accept must
+  // never exceed the sale.
+  const maxCostCents = maxAcceptableCostCents(costBasisCents, cfg, buyerPaidUsdCents);
   const maxPriceUsd = maxCostCents / 100;
   if (Math.round(cheapestPriceUsd * 100) > maxCostCents) {
     // Cost moved beyond the allowed slippage — quote the buyer the new price
@@ -204,7 +209,10 @@ async function liveBuy(
         ok: false,
         error: "Цена изменилась. Обновите страницу и подтвердите покупку заново.",
         priceChanged: true,
-        currentPriceCents: retailCents(Math.round(cheapestPriceUsd * 100), cfg),
+        currentPriceCents: retailCents(
+          usdCentsToRubKopecks(Math.round(cheapestPriceUsd * 100), rate),
+          cfg,
+        ),
       },
       409,
     );

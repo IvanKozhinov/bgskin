@@ -19,7 +19,7 @@ import { formatPrice } from "@/lib/types";
 
 const MIN_DEPOSIT_CENTS = 100; // $1
 const MAX_DEPOSIT_CENTS = 500_000; // $5000
-const PRESETS_DOLLARS = [5, 10, 25, 50, 100, 500] as const;
+const PRESETS_RUB = [500, 1000, 2500, 5000, 10_000, 25_000] as const;
 
 const METHOD_LABELS: Record<PaymentMethodId, string> = {
   sbp: "СБП",
@@ -210,7 +210,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
       if (data.awaitingProvider) {
         setFormMsg({
           kind: "info",
-          text: `Заявка на пополнение создана. Способ оплаты «${methodLabel(selected)}» скоро будет подключён.`,
+          text: `Заявка на пополнение создана. Оплата картой пока неактивна — мы свяжемся, когда её можно будет провести.`,
         });
       } else {
         setFormMsg({ kind: "info", text: "Заявка на пополнение создана." });
@@ -269,7 +269,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
             />
           </div>
           <div className="flex flex-wrap gap-2">
-            {PRESETS_DOLLARS.map((preset) => (
+            {PRESETS_RUB.map((preset) => (
               <button
                 key={preset}
                 type="button"
@@ -283,7 +283,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
                     : "border-line bg-bg-elevated text-ink-dim hover:border-line-bright hover:text-ink"
                 }`}
               >
-                ${preset}
+                {preset.toLocaleString("ru-RU")} ₽
               </button>
             ))}
           </div>
@@ -335,7 +335,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
                           : "border-line text-ink-faint bg-panel-2"
                       }`}
                     >
-                      {m.configured ? "подключён" : "скоро"}
+                      {m.configured ? "подключён" : "неактивен"}
                     </span>
                   </div>
                   <span className="mt-1.5 text-sm text-ink-dim">{m.description}</span>

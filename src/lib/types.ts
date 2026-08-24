@@ -1,3 +1,4 @@
+// build: rub-1787604783
 // Shared contracts for BGSkins. Single source of truth — import, never redefine.
 
 export type ItemCategory =
@@ -253,8 +254,17 @@ export interface BuyResponse {
   fulfillmentUnavailable?: boolean;
 }
 
-export function formatPrice(cents: number): string {
-  return `$${(cents / 100).toFixed(2)}`;
+/**
+ * Money is stored in kopecks and shown in roubles: "1 234,56 ₽".
+ * Whole amounts drop the decimals — "350 ₽" reads better than "350,00 ₽".
+ */
+export function formatPrice(kopecks: number): string {
+  const rub = kopecks / 100;
+  const hasFraction = Math.round(kopecks) % 100 !== 0;
+  return `${rub.toLocaleString("ru-RU", {
+    minimumFractionDigits: hasFraction ? 2 : 0,
+    maximumFractionDigits: 2,
+  })} \u20bd`;
 }
 
 export function rarityColor(r: RarityId): string {

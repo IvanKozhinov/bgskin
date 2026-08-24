@@ -13,6 +13,7 @@ import type {
 import { RARITY_META } from "@/lib/types";
 import { getLiveOffers, type SbOffer } from "@/lib/prices";
 import { getPricingConfig, retailCents } from "@/lib/pricing";
+import { usdToRub, usdCentsToRubKopecks } from "@/lib/currency";
 import { isSkinsbackLive } from "@/lib/settings";
 
 const MERGE_TTL_MS = 5 * 60 * 1000;
@@ -294,6 +295,9 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
 
   const baseMap = liveMap ? buildBasePriceMap(liveMap) : null;
   const cfg = getPricingConfig();
+  // Skinsback quotes USD; the storefront sells in roubles.
+  const rate = await usdToRub();
+  const retail = (costUsdCents: number) => retailCents(usdCentsToRubKopecks(costUsdCents, rate), cfg);
 
   const priced: CatalogItem[] = store.base.map((it) => {
     if (baseMap) {
@@ -302,7 +306,7 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
       const inStock = offer !== undefined && offer.count > 0;
       return {
         ...it,
-        priceCents: offer ? retailCents(offer.costCents, cfg) : 0,
+        priceCents: offer ? retail(offer.costCents) : 0,
         costCents: offer?.costCents,
         stock: offer?.count,
         sourceName: offer?.name,
@@ -315,7 +319,7 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
     const cost = demoPriceCents(it);
     return {
       ...it,
-      priceCents: retailCents(cost, cfg),
+      priceCents: retail(cost),
       costCents: cost,
       stock: undefined,
       available: it.kind !== "extra",
@@ -328,7 +332,7 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
     const known = new Map(store.base.map((it) => [it.name, it]));
     for (const [name, offer] of baseMap) {
       if (known.has(name) || WEAR_SUFFIX.test(name) || offer.count <= 0) continue;
-      const price = retailCents(offer.costCents, cfg);
+      const price = retail(offer.costCents);
       if (price <= 0) continue;
       // StatTrak/Souvenir listings borrow artwork from the plain skin.
       const donor = known.get(donorName(name) ?? "");

@@ -9,15 +9,16 @@
 import { getPricingConfigJson, setPricingConfigJson } from "./db";
 import type { PricingConfig } from "./types";
 
+// All amounts are roubles in kopecks (the shop's currency).
 export const DEFAULT_PRICING: PricingConfig = {
   markupPercent: 10,
   tiers: [
-    { uptoCents: 100, percent: 40 }, // ≤ $1
-    { uptoCents: 500, percent: 25 }, // ≤ $5
-    { uptoCents: 5000, percent: 15 }, // ≤ $50
+    { uptoCents: 10_000, percent: 40 }, // ≤ 100 ₽
+    { uptoCents: 50_000, percent: 25 }, // ≤ 500 ₽
+    { uptoCents: 500_000, percent: 15 }, // ≤ 5 000 ₽
   ],
-  minMarkupCents: 3,
-  roundToCents: 1,
+  minMarkupCents: 300, // 3 ₽
+  roundToCents: 100, // round up to the whole rouble
   maxSlippagePercent: 7,
 };
 

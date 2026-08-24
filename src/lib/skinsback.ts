@@ -143,6 +143,18 @@ export async function sbPricelist(): Promise<{
   return { last_update: toStr(json.last_update), items };
 }
 
+/** Exchange rate for one USD in the given currency, per Skinsback. */
+export async function sbCurrencyRate(code: string): Promise<number> {
+  const json = await sbCall("currencies");
+  const items = Array.isArray(json.items) ? json.items : [];
+  for (const raw of items) {
+    const r = asRecord(raw);
+    if (!r) continue;
+    if (toStr(r.code).toLowerCase() === code.toLowerCase()) return toNumber(r.rate);
+  }
+  throw new Error(`Skinsback: no rate for ${code}`);
+}
+
 /** Search purchasable offers by market name. */
 export async function sbSearch(
   name: string,

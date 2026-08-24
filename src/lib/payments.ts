@@ -15,34 +15,20 @@ import {
 import { createDeposit, getDepositRow, setDepositProviderRef } from "./db";
 import type { DepositResponse, PaymentMethodId, PaymentMethodInfo } from "./types";
 
-export const MIN_DEPOSIT_CENTS = 100; // $1
-export const MAX_DEPOSIT_CENTS = 500_000; // $5000
+// Amounts are roubles, stored in kopecks.
+export const MIN_DEPOSIT_CENTS = 10_000; // 100 ₽
+export const MAX_DEPOSIT_CENTS = 50_000_000; // 500 000 ₽
 
 export function listPaymentMethods(): PaymentMethodInfo[] {
+  // One card method only. Everything else stayed a placeholder that promised
+  // more than the shop can do; showing four greyed-out options just looks
+  // broken. Card turns active the moment an acquirer is configured.
   return [
     {
-      id: "sbp",
-      label: "СБП",
-      description: "Система быстрых платежей — оплата по QR или из банковского приложения.",
-      configured: isSbpConfigured(),
-    },
-    {
       id: "card",
-      label: "Банковская карта",
+      label: "Банковские карты",
       description: "Visa / Mastercard / МИР через защищённую страницу эквайера.",
       configured: isSbpConfigured() || isStripeConfigured(),
-    },
-    {
-      id: "stripe",
-      label: "Stripe",
-      description: "Международные карты через Stripe Checkout.",
-      configured: isStripeConfigured(),
-    },
-    {
-      id: "heleket",
-      label: "Криптовалюта (Heleket)",
-      description: "BTC, USDT, ETH и другие — оплата криптовалютой.",
-      configured: isHeleketConfigured(),
     },
   ];
 }
@@ -73,7 +59,7 @@ async function stripeCheckout(depositId: number, amountCents: number): Promise<s
   body.set("cancel_url", `${siteUrl()}/wallet?deposit=${depositId}&status=cancel`);
   body.set("client_reference_id", String(depositId));
   body.set("line_items[0][quantity]", "1");
-  body.set("line_items[0][price_data][currency]", "usd");
+  body.set("line_items[0][price_data][currency]", "rub");
   body.set("line_items[0][price_data][unit_amount]", String(amountCents));
   body.set("line_items[0][price_data][product_data][name]", "Пополнение баланса BGSkins");
   body.set("metadata[deposit_id]", String(depositId));
@@ -103,7 +89,10 @@ export async function createDepositIntent(opts: {
 }): Promise<DepositResponse> {
   const amount = Math.round(opts.amountCents);
   if (!Number.isFinite(amount) || amount < MIN_DEPOSIT_CENTS || amount > MAX_DEPOSIT_CENTS) {
-    return { ok: false, error: `Сумма должна быть от $${MIN_DEPOSIT_CENTS / 100} до $${MAX_DEPOSIT_CENTS / 100}` };
+    return {
+      ok: false,
+      error: `Сумма должна быть от ${(MIN_DEPOSIT_CENTS / 100).toLocaleString("ru-RU")} ₽ до ${(MAX_DEPOSIT_CENTS / 100).toLocaleString("ru-RU")} ₽`,
+    };
   }
   const configured = isConfigured(opts.method);
   const id = createDeposit({
