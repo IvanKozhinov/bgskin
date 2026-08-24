@@ -7,6 +7,8 @@ import { skinsbackSecret, skinsbackShopId } from "./settings";
 
 const API_URL = "https://skinsback.com/api.php";
 const REQUEST_TIMEOUT_MS = 15_000;
+// The full pricelist is a few MB and occasionally slow; give it its own budget.
+const PRICELIST_TIMEOUT_MS = 40_000;
 
 /**
  * A definitive API-level rejection (Skinsback replied `status:"error"`), as
@@ -75,7 +77,11 @@ function toStr(v: unknown): string {
   return "";
 }
 
-async function sbCall(method: string, params: SbParams = {}): Promise<Record<string, unknown>> {
+async function sbCall(
+  method: string,
+  params: SbParams = {},
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<Record<string, unknown>> {
   const shopId = skinsbackShopId();
   const secret = skinsbackSecret();
   if (!shopId || !secret) {
@@ -89,7 +95,7 @@ async function sbCall(method: string, params: SbParams = {}): Promise<Record<str
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: encodeBody(full),
     cache: "no-store",
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     throw new Error(`Skinsback HTTP ${res.status} for method ${method}`);
@@ -121,7 +127,7 @@ export async function sbPricelist(): Promise<{
   last_update: string;
   items: { name: string; price: number; count: number | undefined }[];
 }> {
-  const json = await sbCall("market_pricelist", { game: "cs2" });
+  const json = await sbCall("market_pricelist", { game: "cs2" }, PRICELIST_TIMEOUT_MS);
   const rawItems = Array.isArray(json.items) ? json.items : [];
   const items: { name: string; price: number; count: number | undefined }[] = [];
   for (const raw of rawItems) {

@@ -16,6 +16,8 @@ import { getPricingConfig, retailCents } from "@/lib/pricing";
 import { isSkinsbackLive } from "@/lib/settings";
 
 const MERGE_TTL_MS = 5 * 60 * 1000;
+/** How soon to retry when the catalogue has no prices at all yet. */
+const RETRY_WHEN_EMPTY_MS = 20 * 1000;
 const DEFAULT_PER_PAGE = 24;
 const MAX_PER_PAGE = 60;
 const FACET_WEAPON_LIMIT = 40;
@@ -282,7 +284,11 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
   // of repricing the entire catalog with fabricated demo numbers. Bump the
   // timestamp so the next request retries the refresh.
   if (live && liveMap === null) {
-    store.mergedAt = Date.now();
+    // Provider unreachable. If we already had prices, keep them for a full TTL.
+    // If we never had any, the storefront is EMPTY — retry soon instead of
+    // leaving customers with a blank shop for the whole merge window.
+    const hasPrices = store.priced.some((it) => it.available !== false);
+    store.mergedAt = hasPrices ? Date.now() : Date.now() - MERGE_TTL_MS + RETRY_WHEN_EMPTY_MS;
     return;
   }
 

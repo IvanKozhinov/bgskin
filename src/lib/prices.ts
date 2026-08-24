@@ -43,7 +43,14 @@ function state(): PriceCacheState {
 
 async function refresh(s: PriceCacheState): Promise<void> {
   try {
-    const { items } = await sbPricelist();
+    // One immediate retry: a single slow response should not blank the shop.
+    let items: Awaited<ReturnType<typeof sbPricelist>>["items"];
+    try {
+      ({ items } = await sbPricelist());
+    } catch (first) {
+      console.warn("[prices] pricelist attempt 1 failed, retrying once:", first);
+      ({ items } = await sbPricelist());
+    }
     const map = new Map<string, number>();
     const offers = new Map<string, SbOffer>();
     for (const item of items) {
