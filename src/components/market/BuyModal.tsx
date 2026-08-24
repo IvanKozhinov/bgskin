@@ -19,7 +19,10 @@ type View =
   | "deposit"
   | "unavailable";
 
-const TRADE_URL_HELP = "https://steamcommunity.com/tradeoffer/new/";
+// Steam shows the user THEIR OWN trade link on the privacy page; /tradeoffer/new/
+// is the "send an offer" screen and does not contain it.
+const TRADE_URL_HELP =
+  "https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url";
 const TRADE_URL_WARNING = "Укажите трейд-ссылку, иначе мы не сможем отправить предмет";
 
 function isValidTradeUrl(v: string): boolean {

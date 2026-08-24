@@ -386,7 +386,7 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
         <p className="mt-3 text-xs text-ink-faint">
           Формат: https://steamcommunity.com/tradeoffer/new/?partner=…&amp;token=…{" "}
           <a
-            href="https://steamcommunity.com/tradeoffer/new/"
+            href="https://steamcommunity.com/id/me/tradeoffers/privacy#trade_offer_access_url"
             target="_blank"
             rel="noopener noreferrer"
             className="text-accent transition-colors hover:text-accent-hot"
