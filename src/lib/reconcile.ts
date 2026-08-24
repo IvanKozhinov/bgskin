@@ -17,13 +17,16 @@ import {
 import { sbOrderInfo, SkinsbackApiError } from "./skinsback";
 import type { OrderStatus } from "./types";
 
-const STALE_AFTER_S = 90; // don't poll an order that just changed
+// A brand-new order changes state within a minute or two, so poll it quickly;
+// anything older has already settled into a slow path.
+const STALE_AFTER_S = 20; // don't poll an order that just changed
 const HARD_TIMEOUT_S = 45 * 60; // give up and refund after this long (from creation)
 // A purchase Skinsback has no record of is refundable much sooner: the provider
 // answered definitively. Small grace so an in-flight registration isn't killed.
 const NOT_FOUND_GRACE_S = 5 * 60;
 const MAX_PER_RUN = 25;
-const MIN_RUN_INTERVAL_MS = 60_000;
+// Cheap enough: one API call per unfinished order, and there are rarely many.
+const MIN_RUN_INTERVAL_MS = 25_000;
 
 const FAILED_OFFER = new Set([
   "canceled",

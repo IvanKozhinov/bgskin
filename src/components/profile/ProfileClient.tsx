@@ -118,24 +118,39 @@ export default function ProfileClient({ user }: { user: SessionUser }) {
 
   const [deposits, setDeposits] = useState<Deposit[] | null>(null);
 
+  // Orders move through "покупаем" → "трейд отправлен" → "доставлен" on the
+  // provider's clock, so a static page would leave the buyer staring at a stale
+  // status. Poll while anything is still in flight, then stop.
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/orders")
-      .then((r) => {
-        if (!r.ok) throw new Error(String(r.status));
-        return r.json() as Promise<{ orders: Order[] }>;
-      })
-      .then((d) => {
-        if (!cancelled) setOrders(d.orders);
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setOrdersError(true);
-          setOrders([]);
-        }
-      });
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const load = () => {
+      fetch("/api/orders")
+        .then((r) => {
+          if (!r.ok) throw new Error(String(r.status));
+          return r.json() as Promise<{ orders: Order[] }>;
+        })
+        .then((d) => {
+          if (cancelled) return;
+          setOrders(d.orders);
+          const pending = d.orders.some(
+            (o) => o.status === "pending" || o.status === "processing" || o.status === "sent",
+          );
+          if (pending) timer = setTimeout(load, 12_000);
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setOrdersError(true);
+            setOrders([]);
+          }
+        });
+    };
+
+    load();
     return () => {
       cancelled = true;
+      if (timer) clearTimeout(timer);
     };
   }, []);
 
