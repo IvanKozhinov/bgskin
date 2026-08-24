@@ -401,6 +401,22 @@ export async function getItemForPurchase(id: string): Promise<CatalogItem | null
   return store.pricedById.get(id) ?? null;
 }
 
+/**
+ * Hide an item that Skinsback no longer has. The price list is a few minutes
+ * stale, so a listing can sell out between refreshes; when the buy path finds
+ * nothing to buy we drop the card immediately instead of leaving customers a
+ * button that always fails. The next refresh restores it if stock returns.
+ */
+export async function markItemUnavailable(id: string): Promise<void> {
+  const store = await ensureFresh();
+  const item = store.pricedById.get(id);
+  if (!item || item.available === false) return;
+  const hidden: CatalogItem = { ...item, available: false, stock: 0 };
+  store.pricedById.set(id, hidden);
+  const idx = store.priced.findIndex((it) => it.id === id);
+  if (idx >= 0) store.priced[idx] = hidden;
+}
+
 export async function queryCatalog(f: CatalogFilters): Promise<CatalogResponse> {
   const store = await ensureFresh();
 

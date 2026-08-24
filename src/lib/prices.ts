@@ -5,7 +5,8 @@
 import { isSkinsbackLive } from "./settings";
 import { sbPricelist } from "./skinsback";
 
-const TTL_MS = 10 * 60 * 1000;
+// Shorter window = fewer sold-out listings on the storefront.
+const TTL_MS = 4 * 60 * 1000;
 const ERROR_RETRY_MS = 60 * 1000;
 
 /** What Skinsback charges us for one market name, plus how many they hold. */

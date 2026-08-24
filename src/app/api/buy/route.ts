@@ -5,7 +5,7 @@
 
 import { randomUUID } from "node:crypto";
 import { isSkinsbackLive } from "@/lib/settings";
-import { getItemForPurchase } from "@/lib/catalog";
+import { getItemForPurchase, markItemUnavailable } from "@/lib/catalog";
 import {
   advanceOrderStatus,
   createOrder,
@@ -187,7 +187,9 @@ async function liveBuy(
         r.name.includes("Souvenir") === wantSouvenir,
     );
     if (candidates.length === 0) {
-      return json({ ok: false, error: "Предмет сейчас недоступен" }, 409);
+      // Sold out since the last price refresh — take it off the storefront now.
+      await markItemUnavailable(item.id);
+      return json({ ok: false, error: "Предмет только что раскупили — он снят с витрины" }, 409);
     }
     const cheapest = candidates.reduce((a, b) => (b.price < a.price ? b : a));
     cheapestId = cheapest.id;
