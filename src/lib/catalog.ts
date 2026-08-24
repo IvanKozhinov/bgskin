@@ -170,13 +170,16 @@ function buildBasePriceMap(live: Map<string, SbOffer>): Map<string, SbOffer> {
     const put = (name: string) => {
       const prev = out.get(name);
       if (!prev) {
-        out.set(name, { costCents: cents, count: offer.count });
+        out.set(name, { costCents: cents, count: offer.count, name: key });
         return;
       }
-      // Cheapest variant sets the price; stock adds up across wears.
+      // Cheapest variant sets both the price and the listing we will buy;
+      // stock adds up across wears.
+      const cheaper = cents < prev.costCents;
       out.set(name, {
-        costCents: Math.min(prev.costCents, cents),
+        costCents: cheaper ? cents : prev.costCents,
         count: prev.count + offer.count,
+        name: cheaper ? key : prev.name,
       });
     };
     put(key);
@@ -247,6 +250,7 @@ function itemFromOfferName(
     priceCents,
     costCents: offer.costCents,
     stock: offer.count,
+    sourceName: offer.name ?? name,
     popularity: donor ? Math.max(0, donor.popularity - 5) : 0,
     available: true,
   };
@@ -295,6 +299,7 @@ async function recomputePrices(store: CatalogStore): Promise<void> {
         priceCents: offer ? retailCents(offer.costCents, cfg) : 0,
         costCents: offer?.costCents,
         stock: offer?.count,
+        sourceName: offer?.name,
         available: inStock,
       };
     }

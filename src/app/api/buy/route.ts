@@ -165,7 +165,11 @@ async function liveBuy(
   let cheapestId: string;
   let cheapestPriceUsd: number;
   try {
-    const results = await sbSearch(item.name);
+    // Skinsback's market_search matches the FULL market name only: searching
+    // "AK-47 | Redline" returns nothing, "AK-47 | Redline (Field-Tested)" works.
+    // The catalog records the exact cheapest listing, so use that.
+    const searchName = item.sourceName ?? item.name;
+    const results = await sbSearch(searchName);
     const prefix = `${item.name} (`;
     // Match the variant we are actually selling: a StatTrak listing must buy a
     // StatTrak offer, and a plain listing must never buy one by accident.
@@ -173,7 +177,7 @@ async function liveBuy(
     const wantSouvenir = item.name.includes("Souvenir");
     const candidates = results.filter(
       (r) =>
-        (r.name === item.name || r.name.startsWith(prefix)) &&
+        (r.name === searchName || r.name === item.name || r.name.startsWith(prefix)) &&
         r.name.includes("StatTrak") === wantStatTrak &&
         r.name.includes("Souvenir") === wantSouvenir,
     );

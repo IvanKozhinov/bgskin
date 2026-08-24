@@ -12,6 +12,8 @@ const ERROR_RETRY_MS = 60 * 1000;
 export interface SbOffer {
   costCents: number;
   count: number;
+  /** Full market name of the cheapest listing (with wear suffix). */
+  name?: string;
 }
 
 interface PriceCacheState {
@@ -58,9 +60,9 @@ async function refresh(s: PriceCacheState): Promise<void> {
           : Math.max(0, Math.round(item.count));
       if (!prev || costCents < prev.costCents) {
         map.set(item.name, costCents);
-        offers.set(item.name, { costCents, count });
+        offers.set(item.name, { costCents, count, name: item.name });
       } else {
-        offers.set(item.name, { costCents: prev.costCents, count: prev.count + count });
+        offers.set(item.name, { costCents: prev.costCents, count: prev.count + count, name: prev.name });
       }
     }
     s.map = map;

@@ -50,6 +50,12 @@ export interface CatalogItem {
   collection?: string;
   priceCents: number; // price shown to the buyer (Skinsback cost + markup), cents USD
   costCents?: number; // what Skinsback charges us, cents USD — never shown to buyers
+  /**
+   * Exact Skinsback market name of the cheapest variant behind this card
+   * (e.g. "AK-47 | Redline (Field-Tested)"). market_search matches only the
+   * full name, so the buy path must use this rather than the base name.
+   */
+  sourceName?: string;
   stock?: number; // units Skinsback currently has for this name
   popularity: number; // 0..100 synthetic, for "hot" sorting
   available?: boolean; // false in live mode when no Skinsback price exists (not buyable). undefined == true.
