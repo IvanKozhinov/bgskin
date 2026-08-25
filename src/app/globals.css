@@ -191,6 +191,18 @@ body {
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
+.input[type="number"]::-webkit-outer-spin-button,
+.input[type="number"]::-webkit-inner-spin-button {
+  /* The browser spinner would sit under the currency sign and steal clicks. */
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
 .input::placeholder {
   color: var(--text-faint);
 }

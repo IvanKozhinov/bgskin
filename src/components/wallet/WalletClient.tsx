@@ -259,18 +259,20 @@ export default function WalletClient({ user }: { user: SessionUser }) {
         </label>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative w-full sm:max-w-xs">
-            <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-display text-lg text-ink-faint">
-              $
+            {/* Rouble sign goes AFTER the number (ru typography) — as a left
+                prefix it sat on top of the digits being typed. */}
+            <span className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 font-display text-lg text-ink-faint">
+              ₽
             </span>
             <input
               id="deposit-amount"
-              className="input pl-8 font-display text-lg"
+              className="input pr-10 font-display text-lg"
               type="number"
               inputMode="decimal"
               min={minCents / 100}
               max={maxCents / 100}
               step="1"
-              placeholder="25"
+              placeholder="500"
               value={amount}
               onChange={(e) => {
                 setAmount(e.target.value);
