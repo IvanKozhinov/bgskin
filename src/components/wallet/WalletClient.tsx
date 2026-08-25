@@ -17,8 +17,10 @@ import type {
 } from "@/lib/types";
 import { formatPrice } from "@/lib/types";
 
-const MIN_DEPOSIT_CENTS = 100; // $1
-const MAX_DEPOSIT_CENTS = 500_000; // $5000
+// Limits come from the server (/api/payment-methods); these are only the
+// values used before that response arrives.
+const FALLBACK_MIN_CENTS = 10_000; // 100 ₽
+const FALLBACK_MAX_CENTS = 50_000_000; // 500 000 ₽
 const PRESETS_RUB = [500, 1000, 2500, 5000, 10_000, 25_000] as const;
 
 const METHOD_LABELS: Record<PaymentMethodId, string> = {
@@ -80,6 +82,8 @@ export default function WalletClient({ user }: { user: SessionUser }) {
 
   const [methods, setMethods] = useState<PaymentMethodInfo[] | null>(null);
   const [methodsError, setMethodsError] = useState(false);
+  const [minCents, setMinCents] = useState(FALLBACK_MIN_CENTS);
+  const [maxCents, setMaxCents] = useState(FALLBACK_MAX_CENTS);
   const [selected, setSelected] = useState<PaymentMethodId | null>(null);
 
   const [amount, setAmount] = useState("");
@@ -97,8 +101,8 @@ export default function WalletClient({ user }: { user: SessionUser }) {
 
   const amountValid =
     Number.isFinite(amountCents) &&
-    amountCents >= MIN_DEPOSIT_CENTS &&
-    amountCents <= MAX_DEPOSIT_CENTS;
+    amountCents >= minCents &&
+    amountCents <= maxCents;
 
   // Load payment methods.
   useEffect(() => {
@@ -106,11 +110,17 @@ export default function WalletClient({ user }: { user: SessionUser }) {
     fetch("/api/payment-methods")
       .then((r) => {
         if (!r.ok) throw new Error(String(r.status));
-        return r.json() as Promise<{ methods: PaymentMethodInfo[] }>;
+        return r.json() as Promise<{
+          methods: PaymentMethodInfo[];
+          minCents?: number;
+          maxCents?: number;
+        }>;
       })
       .then((d) => {
         if (cancelled) return;
         setMethods(d.methods);
+        if (typeof d.minCents === "number") setMinCents(d.minCents);
+        if (typeof d.maxCents === "number") setMaxCents(d.maxCents);
         // Preselect the first configured method, else the first available.
         const preferred = d.methods.find((m) => m.configured) ?? d.methods[0];
         if (preferred) setSelected(preferred.id);
@@ -185,7 +195,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
     if (!amountValid) {
       setFormMsg({
         kind: "err",
-        text: `Сумма должна быть от ${formatPrice(MIN_DEPOSIT_CENTS)} до ${formatPrice(MAX_DEPOSIT_CENTS)}`,
+        text: `Сумма должна быть от ${formatPrice(minCents)} до ${formatPrice(maxCents)}`,
       });
       return;
     }
@@ -257,8 +267,8 @@ export default function WalletClient({ user }: { user: SessionUser }) {
               className="input pl-8 font-display text-lg"
               type="number"
               inputMode="decimal"
-              min={MIN_DEPOSIT_CENTS / 100}
-              max={MAX_DEPOSIT_CENTS / 100}
+              min={minCents / 100}
+              max={maxCents / 100}
               step="1"
               placeholder="25"
               value={amount}
@@ -289,7 +299,7 @@ export default function WalletClient({ user }: { user: SessionUser }) {
           </div>
         </div>
         <p className="mt-2 text-xs text-ink-faint">
-          Минимум {formatPrice(MIN_DEPOSIT_CENTS)}, максимум {formatPrice(MAX_DEPOSIT_CENTS)}.
+          Минимум {formatPrice(minCents)}, максимум {formatPrice(maxCents)}.
         </p>
 
         {/* Payment methods */}

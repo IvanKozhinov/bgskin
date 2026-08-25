@@ -383,7 +383,7 @@ export default function MarketClient() {
                   placeholder={bounds ? (bounds.min / 100).toFixed(2) : "от"}
                   value={minD}
                   onChange={(e) => setMinD(e.target.value)}
-                  aria-label="Минимальная цена, $"
+                  aria-label="Минимальная цена, ₽"
                 />
                 <span className="text-ink-faint">–</span>
                 <input
@@ -395,7 +395,7 @@ export default function MarketClient() {
                   placeholder={bounds ? (bounds.max / 100).toFixed(2) : "до"}
                   value={maxD}
                   onChange={(e) => setMaxD(e.target.value)}
-                  aria-label="Максимальная цена, $"
+                  aria-label="Максимальная цена, ₽"
                 />
               </div>
               {bounds && (
